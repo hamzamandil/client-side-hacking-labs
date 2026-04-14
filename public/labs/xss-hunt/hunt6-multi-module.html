@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NexaApp - Collaboration Platform</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#f8fafc;color:#0f172a}
+    .nx-bar{background:#0f172a;color:#e2e8f0;height:48px;display:flex;align-items:center;padding:0 20px;justify-content:space-between}.nx-bar .brand{font-weight:800;font-size:15px}.nx-bar .brand em{color:#a78bfa;font-style:normal}.nx-bar .nav{display:flex;gap:16px;font-size:13px}.nx-bar .nav a{color:#94a3b8;text-decoration:none;font-weight:500}.nx-bar .nav a:hover{color:#e2e8f0}
+    .nx-body{display:flex;min-height:calc(100vh - 48px)}
+    .nx-side{width:200px;background:#fff;border-right:1px solid #e2e8f0;padding:12px 0}.nx-side a{display:block;padding:7px 14px;font-size:12px;color:#64748b;text-decoration:none;font-weight:500}.nx-side a:hover{color:#0f172a;background:#f8fafc}.nx-side .lbl{font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;padding:14px 14px 4px}
+    .nx-main{flex:1;padding:24px;overflow-y:auto}
+    .nx-row{display:grid;grid-template-columns:1fr 340px;gap:16px;margin-top:16px}
+    .nx-panel{background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:14px}.nx-panel-head{padding:12px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600}.nx-panel-body{padding:16px}
+    h1{font-size:20px;font-weight:700}.page-desc{font-size:13px;color:#64748b;margin-bottom:0}
+    .nx-compose{margin-bottom:14px}.nx-compose textarea{width:100%;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;font-size:13px;resize:none;min-height:56px;font-family:inherit}.nx-compose textarea:focus{outline:none;border-color:#a78bfa}
+    .nx-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.nx-metric{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center}.nx-metric .n{font-size:22px;font-weight:800}.nx-metric .l{font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase}
+    #nx-feed,#nx-profile,#nx-widgets,#nx-search-results{min-height:40px}
+    .nx-search{display:flex;gap:6px;margin-bottom:12px}.nx-search input{flex:1;padding:8px 12px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px}.nx-search input:focus{outline:none;border-color:#a78bfa}.nx-search button{padding:8px 14px;background:#7c3aed;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="nx-bar">
+    <div class="brand"><em>Nexa</em>App</div>
+    <div class="nav">
+      <a href="#">Dashboard</a>
+      <a href="#">Projects</a>
+      <a href="#">Messages</a>
+      <a href="#">Settings</a>
+    </div>
+  </div>
+
+  <div class="nx-body">
+    <div class="nx-side">
+      <div class="lbl">Workspace</div>
+      <a href="#">Home</a>
+      <a href="#">Activity</a>
+      <a href="#">Files</a>
+      <div class="lbl">Tools</div>
+      <a href="#">Search</a>
+      <a href="#">Reports</a>
+      <a href="#">Integrations</a>
+    </div>
+
+    <div class="nx-main">
+      <h1>Workspace Home</h1>
+      <p class="page-desc">Your collaboration hub</p>
+
+      <div class="nx-metrics">
+        <div class="nx-metric"><div class="n">847</div><div class="l">Active Users</div></div>
+        <div class="nx-metric"><div class="n">2.4K</div><div class="l">Messages Today</div></div>
+        <div class="nx-metric"><div class="n">94%</div><div class="l">Uptime</div></div>
+      </div>
+
+      <div class="nx-row">
+        <div>
+          <div class="nx-panel">
+            <div class="nx-panel-head">Search</div>
+            <div class="nx-panel-body">
+              <div class="nx-search">
+                <input type="text" id="nx-search-input" placeholder="Search workspace...">
+                <button onclick="NexaSearch.execute()">Search</button>
+              </div>
+              <div id="nx-search-results"></div>
+            </div>
+          </div>
+
+          <div class="nx-panel">
+            <div class="nx-panel-head">Activity Feed</div>
+            <div class="nx-panel-body" id="nx-feed">
+              <div style="color:#94a3b8;font-size:13px">Loading feed...</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="nx-panel">
+            <div class="nx-panel-head">Profile</div>
+            <div class="nx-panel-body" id="nx-profile"></div>
+          </div>
+          <div class="nx-panel">
+            <div class="nx-panel-head">Widgets</div>
+            <div class="nx-panel-body" id="nx-widgets"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!--
+    FINAL BOSS: This page loads THREE separate JS modules.
+    Each module has different sinks and different source patterns.
+    You need to trace data flow ACROSS modules to find all XSS vectors.
+
+    The challenge: find at least 3 distinct XSS vulnerabilities
+    using different sources and sinks.
+  -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+  <!-- Module 1: Search (uses jQuery) -->
+  <script>
+  var NexaSearch={execute:function(){var q=document.getElementById("nx-search-input").value;if(!q){q=new URLSearchParams(location.search).get("q")}if(!q)return;fetch("/api/search?q="+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(d){NexaSearch.render(d,q)})},render:function(data,query){var c=document.getElementById("nx-search-results");if(!data.results||!data.results.length){$("#nx-search-results").html('<div style="color:#94a3b8;font-size:13px;padding:8px">No results for "<b>'+query+'</b>"</div>');return}var h='<div style="font-size:12px;color:#94a3b8;margin-bottom:8px">'+data.results.length+' results</div>';data.results.forEach(function(r){h+='<div style="padding:6px 0;font-size:13px;border-bottom:1px solid #f1f5f9"><a href="#" style="color:#7c3aed;text-decoration:none;font-weight:500">'+r.title+'</a></div>'});c.innerHTML=h},init:function(){var q=new URLSearchParams(location.search).get("q");if(q){document.getElementById("nx-search-input").value=q;this.execute()}}};NexaSearch.init();
+  </script>
+
+  <!-- Module 2: Profile (fetches from API, renders bio) -->
+  <script>
+  var NexaProfile={load:function(){var container=document.getElementById("nx-profile");var params=new URLSearchParams(location.search);var user=params.get("user")||"victim";fetch("/api/user/profile/"+encodeURIComponent(user),{credentials:"include"}).then(function(r){return r.json()}).then(function(d){if(d.error){container.innerHTML='<div style="color:#94a3b8;font-size:13px">User not found</div>';return}container.innerHTML='<div style="text-align:center"><div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#a78bfa);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;margin:0 auto 8px">'+d.username[0].toUpperCase()+'</div><div style="font-size:14px;font-weight:600">'+d.username+'</div><div style="font-size:12px;color:#94a3b8">'+d.email+'</div><div id="nx-bio" style="font-size:13px;color:#475569;margin-top:8px;padding:8px;background:#f8fafc;border-radius:6px">'+(d.bio||"<em>No bio</em>")+'</div></div>'}).catch(function(){container.innerHTML='<div style="color:#94a3b8;font-size:13px">Failed to load profile</div>'})},updateBioFromHash:function(){var hash=location.hash.substring(1);var parts={};hash.split("&").forEach(function(p){var kv=p.split("=");if(kv.length===2)parts[decodeURIComponent(kv[0])]=decodeURIComponent(kv[1])});if(parts.bio){var bioEl=document.getElementById("nx-bio");if(bioEl){bioEl.insertAdjacentHTML("beforeend",'<div style="margin-top:6px;padding:6px;background:#ede9fe;border-radius:4px;font-size:12px">'+parts.bio+'</div>')}}}};NexaProfile.load();window.addEventListener("hashchange",function(){NexaProfile.updateBioFromHash()});NexaProfile.updateBioFromHash();
+  </script>
+
+  <!-- Module 3: Widget loader (postMessage + URL params) -->
+  <script>
+  var NexaWidgets={container:null,init:function(){this.container=document.getElementById("nx-widgets");this.loadFromURL();this.listenMessages()},loadFromURL:function(){var params=new URLSearchParams(location.search);var widgetData=params.get("widget");if(widgetData){try{var config=JSON.parse(atob(widgetData));this.mount(config)}catch(e){try{var config2=JSON.parse(widgetData);this.mount(config2)}catch(e2){}}}},mount:function(config){if(!this.container)return;if(config.type==="announcement"){var div=document.createElement("div");div.style.cssText="padding:10px;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;font-size:12px;color:#92400e;margin-bottom:8px";div.innerHTML=config.message||"";this.container.appendChild(div)}if(config.type==="embed"){var frame=document.createElement("iframe");frame.src=config.url||"about:blank";frame.style.cssText="width:100%;height:"+(config.height||"200px")+";border:1px solid #e2e8f0;border-radius:6px";this.container.appendChild(frame)}if(config.type==="custom"&&config.html){this.container.insertAdjacentHTML("beforeend",config.html)}},listenMessages:function(){var self=this;window.addEventListener("message",function(e){if(e.data&&e.data.type==="nx:widget"){self.mount(e.data.config||{})}if(e.data&&e.data.type==="nx:exec"&&e.data.code){new Function(e.data.code)()}})}};NexaWidgets.init();
+  </script>
+
+  <script src="/js/app.js"></script>
+  <script>setupLabVerification('xss-hunt-6', 'xss');</script>
+</body>
+</html>

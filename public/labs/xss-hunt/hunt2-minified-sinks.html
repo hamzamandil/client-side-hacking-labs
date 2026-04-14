@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CoreDash - Enterprise Dashboard</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#f1f5f9;color:#0f172a}
+    .cd-header{background:#0f172a;color:#e2e8f0;height:48px;display:flex;align-items:center;padding:0 24px;justify-content:space-between}.cd-header .logo{font-weight:800;font-size:15px}.cd-header .logo span{color:#38bdf8}.cd-header .nav{display:flex;gap:20px;font-size:13px}.cd-header .nav a{color:#94a3b8;text-decoration:none;font-weight:500}.cd-header .nav a:hover{color:#e2e8f0}.cd-header .user{display:flex;align-items:center;gap:8px;font-size:13px;color:#94a3b8}
+    .cd-layout{display:flex;min-height:calc(100vh - 48px)}.cd-sidebar{width:220px;background:#fff;border-right:1px solid #e2e8f0;padding:16px 0}.cd-sidebar a{display:block;padding:8px 20px;font-size:13px;color:#64748b;text-decoration:none;font-weight:500}.cd-sidebar a:hover{background:#f8fafc;color:#0f172a}.cd-sidebar a.active{color:#0ea5e9;background:#f0f9ff;border-right:2px solid #0ea5e9}.cd-sidebar .label{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;padding:16px 20px 6px}
+    .cd-main{flex:1;padding:28px 32px}h1{font-size:22px;font-weight:700;margin-bottom:4px}.desc{font-size:13px;color:#64748b;margin-bottom:24px}
+    .cd-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px}.cd-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:18px}.cd-card h3{font-size:12px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}.cd-card .val{font-size:28px;font-weight:800}.cd-card .change{font-size:12px;margin-top:4px;font-weight:600}.up{color:#22c55e}.down{color:#ef4444}
+    .cd-panel{background:#fff;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:16px;overflow:hidden}.cd-panel-header{padding:14px 18px;border-bottom:1px solid #f1f5f9;font-size:14px;font-weight:600}.cd-panel-body{padding:18px}
+    #cd-content{margin-top:16px}#cd-widget-area{margin-top:16px;min-height:50px}
+    .cd-404{text-align:center;padding:48px;color:#64748b}.cd-404 h2{font-size:18px;color:#0f172a;margin-bottom:8px}
+    .cd-notif{position:fixed;top:56px;right:16px;padding:12px 20px;border-radius:8px;font-size:13px;font-weight:500;z-index:1000;box-shadow:0 4px 16px rgba(0,0,0,.12);animation:fadeIn .3s ease;max-width:400px}.cd-notif-info{background:#dbeafe;color:#1e40af}.cd-notif-warning{background:#fef3c7;color:#92400e}.cd-notif-error{background:#fecaca;color:#991b1b}@keyframes fadeIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+    table{width:100%;border-collapse:collapse}th{text-align:left;padding:8px 12px;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;border-bottom:1px solid #e2e8f0}td{padding:10px 12px;font-size:13px;border-bottom:1px solid #f1f5f9;color:#475569}
+  </style>
+</head>
+<body>
+  <div class="cd-header">
+    <div class="logo"><span>Core</span>Dash</div>
+    <div class="nav">
+      <a href="#dashboard" class="active">Dashboard</a>
+      <a href="#analytics">Analytics</a>
+      <a href="#users">Users</a>
+      <a href="#reports">Reports</a>
+    </div>
+    <div class="user">Admin &middot; Enterprise Plan</div>
+  </div>
+
+  <div class="cd-layout">
+    <div class="cd-sidebar">
+      <div class="label">Overview</div>
+      <a href="#dashboard" class="active">Dashboard</a>
+      <a href="#analytics">Real-time</a>
+      <a href="#funnels">Funnels</a>
+      <div class="label">Data</div>
+      <a href="#users">Users</a>
+      <a href="#events">Events</a>
+      <a href="#segments">Segments</a>
+      <div class="label">System</div>
+      <a href="#settings">Settings</a>
+      <a href="#logs">Audit Log</a>
+    </div>
+
+    <div class="cd-main">
+      <h1>Enterprise Dashboard</h1>
+      <div class="desc">Real-time metrics &middot; Last updated 30 seconds ago</div>
+
+      <div class="cd-grid">
+        <div class="cd-card"><h3>Monthly Active Users</h3><div class="val">128,491</div><div class="change up">+14.2% vs last month</div></div>
+        <div class="cd-card"><h3>Revenue (MTD)</h3><div class="val">$847K</div><div class="change up">+8.7% vs target</div></div>
+        <div class="cd-card"><h3>Churn Rate</h3><div class="val">2.1%</div><div class="change down">+0.3% vs last month</div></div>
+      </div>
+
+      <div class="cd-panel">
+        <div class="cd-panel-header">Recent Activity</div>
+        <div class="cd-panel-body">
+          <table>
+            <thead><tr><th>Event</th><th>User</th><th>Time</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>Signup</td><td>alice@startup.io</td><td>2 min ago</td><td style="color:#22c55e">Completed</td></tr>
+              <tr><td>Upgrade</td><td>bob@acme.com</td><td>15 min ago</td><td style="color:#22c55e">Completed</td></tr>
+              <tr><td>Support Ticket</td><td>carol@enterprise.co</td><td>1 hr ago</td><td style="color:#f59e0b">Pending</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="cd-content"></div>
+      <div id="cd-widget-area"></div>
+    </div>
+  </div>
+
+  <!--
+    The application logic is in this MINIFIED JS file.
+    You need to beautify it and find the sinks.
+    Multiple vulnerabilities exist - find them all.
+    Hint: there are at least 4 different XSS vectors in the minified code.
+  -->
+  <script src="/js/apps/dashboard-core.min.js"></script>
+  <script>CoreDash.init();</script>
+  <script src="/js/app.js"></script>
+  <script>setupLabVerification('xss-hunt-2', 'xss');</script>
+</body>
+</html>

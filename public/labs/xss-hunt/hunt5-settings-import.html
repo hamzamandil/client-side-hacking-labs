@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WorkOS - Workspace Settings</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#f9fafb;color:#111827}
+    .ws-nav{background:#fff;border-bottom:1px solid #e5e7eb;height:52px;display:flex;align-items:center;padding:0 20px;justify-content:space-between}.ws-nav .brand{font-weight:800;font-size:16px}.ws-nav .brand span{color:#6366f1}.ws-nav .links{display:flex;gap:20px;font-size:13px}.ws-nav .links a{color:#6b7280;text-decoration:none;font-weight:500}.ws-nav .links a:hover{color:#111827}.ws-nav .links a.active{color:#6366f1}.ws-nav .user-pill{background:#f3f4f6;padding:5px 14px 5px 8px;border-radius:20px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px}.ws-nav .dot{width:7px;height:7px;border-radius:50%;background:#22c55e}
+    .ws-layout{display:flex;min-height:calc(100vh - 52px)}.ws-sidebar{width:220px;background:#fff;border-right:1px solid #e5e7eb;padding:16px 0}.ws-sidebar .nav-label{font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;padding:16px 16px 6px}.ws-sidebar .nav-label:first-child{padding-top:8px}.ws-sidebar a{display:flex;align-items:center;gap:8px;padding:8px 16px;font-size:13px;color:#6b7280;text-decoration:none;font-weight:500}.ws-sidebar a:hover{background:#f9fafb;color:#111827}.ws-sidebar a.active{background:#eef2ff;color:#6366f1}
+    .ws-main{flex:1;padding:32px}.ws-main h1{font-size:22px;font-weight:700;margin-bottom:4px}.ws-main .desc{font-size:14px;color:#6b7280;margin-bottom:28px}
+    #settings-nav{margin-bottom:0}#settings-content{min-height:300px}
+    .settings-nav-item{display:flex;align-items:center;gap:8px;padding:8px 16px;font-size:13px;color:#6b7280;text-decoration:none;font-weight:500;border-radius:0}.settings-nav-item:hover{background:#f9fafb;color:#111827}.settings-nav-item.active{background:#eef2ff;color:#6366f1;border-right:2px solid #6366f1}.nav-icon{font-size:15px}
+    h2{font-size:18px;font-weight:700;margin-bottom:16px;padding-top:4px}.settings-group{margin-bottom:18px}.settings-group label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:4px}.settings-input,.settings-select,.settings-textarea{width:100%;max-width:400px;padding:9px 14px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;color:#111827;background:#fff}.settings-input:focus,.settings-select:focus,.settings-textarea:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.1)}
+    .btn-save{padding:9px 20px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}.btn-save:hover{background:#4f46e5}
+    .theme-options{display:flex;gap:8px;margin-top:4px}.theme-btn{padding:8px 18px;border:1px solid #d1d5db;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;font-weight:500}.theme-btn:hover{border-color:#6366f1;color:#6366f1}
+    .settings-toggle{display:flex;align-items:center;gap:8px;font-size:14px}
+    .settings-import-confirm{background:#fff;border:2px solid #6366f1;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 4px 16px rgba(99,102,241,.1)}.import-header{font-size:16px;font-weight:700;color:#6366f1;margin-bottom:12px}.import-body p{font-size:14px;color:#374151;margin-bottom:8px}.import-preview{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin:8px 0;overflow:auto;max-height:200px}.import-preview pre{font-size:12px;color:#475569;font-family:Consolas,monospace;white-space:pre-wrap}.import-message{background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:13px;color:#92400e;margin-top:8px}.import-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}.btn-cancel{padding:8px 18px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:8px;font-size:13px;cursor:pointer;font-weight:500;color:#374151}.btn-import{padding:8px 18px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600}
+    .settings-toast{position:fixed;bottom:20px;right:20px;padding:12px 20px;border-radius:8px;font-size:13px;font-weight:500;z-index:1000;animation:slideUp .3s ease}.settings-toast-success{background:#166534;color:#fff}.settings-toast-error{background:#991b1b;color:#fff}.settings-toast-info{background:#1e40af;color:#fff}@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+    .settings-placeholder{padding:40px;text-align:center;color:#9ca3af}.settings-placeholder h3{font-size:16px;color:#374151;margin-bottom:6px}
+  </style>
+</head>
+<body>
+  <div class="ws-nav">
+    <div class="brand"><span>Work</span>OS</div>
+    <div class="links">
+      <a href="#">Dashboard</a>
+      <a href="#">Projects</a>
+      <a href="#">Team</a>
+      <a href="#" class="active">Settings</a>
+    </div>
+    <div class="user-pill"><div class="dot"></div>John Doe</div>
+  </div>
+
+  <div class="ws-layout">
+    <div class="ws-sidebar" id="settings-nav"></div>
+    <div class="ws-main">
+      <h1>Workspace Settings</h1>
+      <div class="desc">Manage your workspace configuration and preferences</div>
+      <div id="settings-content"></div>
+    </div>
+  </div>
+
+  <!--
+    Settings module loaded from separate JS file.
+    The settings page supports importing settings from shared URLs.
+    The import flow decodes data from URL params and renders a confirmation dialog.
+    Find where unsanitized data reaches innerHTML.
+
+    Multiple sources:
+    - Hash params (#settings/appearance?css=...)
+    - URL query params (?import=...)
+    - Base64-encoded JSON in URL
+
+    The sanitization is inconsistent - some paths are safe, some aren't.
+  -->
+  <script src="/js/apps/settings-module.js"></script>
+  <script>AppSettings.init('settings-content');</script>
+  <script src="/js/app.js"></script>
+  <script>setupLabVerification('xss-hunt-5', 'xss');</script>
+</body>
+</html>

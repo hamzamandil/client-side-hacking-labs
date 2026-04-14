@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TicketFlow - Support Dashboard</title>
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#f8fafc;color:#1e293b}.topbar{background:#fff;border-bottom:1px solid #e2e8f0;height:52px;display:flex;align-items:center;padding:0 24px;justify-content:space-between}.topbar .brand{font-weight:800;font-size:16px;color:#6366f1}.topbar .nav{display:flex;gap:20px;font-size:13px}.topbar .nav a{color:#64748b;text-decoration:none;font-weight:500}.topbar .nav a.active{color:#6366f1}.topbar .user{display:flex;align-items:center;gap:8px;font-size:13px;color:#64748b}.topbar .avatar{width:28px;height:28px;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+    .container{max-width:960px;margin:0 auto;padding:32px 24px}.page-header{margin-bottom:24px}.page-header h1{font-size:22px;font-weight:700;margin-bottom:4px}.page-header p{font-size:14px;color:#64748b}
+    .search-bar{display:flex;gap:8px;margin-bottom:20px}.search-bar input{flex:1;padding:10px 16px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;background:#fff}.search-bar input:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,0.1)}.search-bar button{padding:10px 20px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer}.search-bar button:hover{background:#4f46e5}
+    .tf-filter-bar{display:flex;gap:6px;margin-bottom:16px}.tf-filter-btn{padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #e2e8f0;background:#fff;color:#64748b}.tf-filter-btn:hover,.tf-filter-btn.active{background:#eef2ff;border-color:#c7d2fe;color:#6366f1}
+    #tf-results{min-height:200px}.tf-loading{text-align:center;padding:40px;color:#94a3b8;font-size:14px}.tf-error{text-align:center;padding:40px;color:#ef4444;font-size:14px}.tf-empty{text-align:center;padding:48px 24px}.tf-empty h3{font-size:16px;font-weight:600;margin-bottom:6px;color:#1e293b}.tf-empty p{font-size:14px;color:#64748b;margin-bottom:4px}.tf-muted{font-size:13px;color:#94a3b8}
+    .tf-results-header{padding:10px 0;font-size:13px;color:#64748b;border-bottom:1px solid #f1f5f9;margin-bottom:8px}.tf-ticket-list{}.tf-ticket{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 18px;margin-bottom:8px;transition:all 0.15s}.tf-ticket:hover{border-color:#c7d2fe;box-shadow:0 2px 8px rgba(99,102,241,0.06)}.tf-ticket-title{font-size:14px;font-weight:600;margin-bottom:4px}.tf-ticket-meta{font-size:12px;color:#94a3b8}
+    .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}.stat-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px}.stat-label{font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:0.04em}.stat-value{font-size:24px;font-weight:800;color:#1e293b;margin-top:4px}
+    .tf-toast{position:fixed;bottom:20px;right:20px;padding:12px 20px;border-radius:8px;font-size:13px;font-weight:500;z-index:1000;animation:slideUp .3s ease}@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}.tf-toast-info{background:#1e293b;color:#e2e8f0}.tf-toast-error{background:#991b1b;color:#fff}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">TicketFlow</div>
+    <div class="nav">
+      <a href="#" class="active">Tickets</a>
+      <a href="#">Knowledge Base</a>
+      <a href="#">Reports</a>
+      <a href="#">Settings</a>
+    </div>
+    <div class="user"><span>Jane Cooper</span><div class="avatar">JC</div></div>
+  </div>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Support Tickets</h1>
+      <p>Search and manage your team's support tickets</p>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">Open</div><div class="stat-value">47</div></div>
+      <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value">12</div></div>
+      <div class="stat-card"><div class="stat-label">Resolved Today</div><div class="stat-value">23</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Response</div><div class="stat-value">4m</div></div>
+    </div>
+
+    <div class="search-bar">
+      <input type="text" id="tf-search" placeholder="Search tickets by keyword, ID, or assignee...">
+      <button onclick="TicketFlow.Search.execute(document.getElementById('tf-search').value)">Search</button>
+    </div>
+
+    <div class="tf-filter-bar">
+      <button class="tf-filter-btn active" data-filter="all">All</button>
+      <button class="tf-filter-btn" data-filter="open">Open</button>
+      <button class="tf-filter-btn" data-filter="pending">Pending</button>
+      <button class="tf-filter-btn" data-filter="escalated">Escalated</button>
+      <button class="tf-filter-btn" data-filter="closed">Closed</button>
+    </div>
+
+    <div id="tf-results"></div>
+  </div>
+
+  <!-- The vulnerable code is in this external JS file - go read it -->
+  <script src="/js/apps/ticket-app.js"></script>
+  <script src="/js/app.js"></script>
+  <script>setupLabVerification('xss-hunt-1', 'xss');</script>
+</body>
+</html>

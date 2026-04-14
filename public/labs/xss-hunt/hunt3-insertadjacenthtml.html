@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BuzzBoard - Social Feed</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#f8fafc;color:#0f172a}
+    .bb-topbar{background:#fff;border-bottom:1px solid #e2e8f0;height:52px;display:flex;align-items:center;padding:0 24px;justify-content:space-between}.bb-topbar .brand{font-weight:800;font-size:16px;color:#f97316}.bb-topbar .nav{display:flex;gap:18px;font-size:13px}.bb-topbar .nav a{color:#64748b;text-decoration:none;font-weight:500;padding:4px 0}.bb-topbar .nav a.active{color:#f97316;border-bottom:2px solid #f97316}.bb-topbar .actions{display:flex;align-items:center;gap:10px}.bb-topbar .notif{width:32px;height:32px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer;position:relative}.bb-topbar .notif .dot{position:absolute;top:4px;right:4px;width:6px;height:6px;border-radius:50%;background:#ef4444}.bb-topbar .me{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+    .bb-layout{display:flex;max-width:1100px;margin:0 auto;padding:24px;gap:20px}.bb-main{flex:1;max-width:600px}.bb-aside{width:300px}
+    .bb-compose{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px}.bb-compose textarea{width:100%;border:none;resize:none;font-size:14px;font-family:inherit;outline:none;min-height:60px;color:#0f172a}.bb-compose textarea::placeholder{color:#94a3b8}.bb-compose-actions{display:flex;justify-content:flex-end;margin-top:8px;gap:8px}.bb-compose-actions button{padding:7px 16px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:none}.bb-compose-actions .post-btn{background:#f97316;color:#fff}.bb-compose-actions .post-btn:hover{background:#ea580c}
+    .bb-post{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:12px;transition:all .15s}.bb-post:hover{box-shadow:0 2px 8px rgba(0,0,0,.04)}.bb-post-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}.bb-avatar{width:36px;height:36px;border-radius:50%;background:#fed7aa;color:#c2410c;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}.bb-post-meta{display:flex;flex-direction:column}.bb-author{font-size:14px;font-weight:600}.bb-handle{font-size:12px;color:#94a3b8}.bb-time{font-size:12px;color:#94a3b8}.bb-post-body{font-size:14px;line-height:1.6;margin-bottom:12px;color:#334155}.bb-post-actions{display:flex;gap:12px}.bb-post-actions button{background:none;border:none;font-size:13px;color:#64748b;cursor:pointer;padding:4px 8px;border-radius:6px}.bb-post-actions button:hover{background:#f1f5f9;color:#0f172a}
+    .bb-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:12px}.bb-card h3{font-size:14px;font-weight:600;margin-bottom:10px}.bb-card .item{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:13px;color:#475569}.bb-card .item .mini-avatar{width:28px;height:28px;border-radius:50%;background:#e2e8f0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#64748b}
+    #bb-profile-card{min-height:50px}.bb-profile{text-align:center;padding:12px 0}.bb-profile-avatar{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;margin:0 auto 10px}.bb-profile h3{font-size:16px;font-weight:600}.bb-profile-email{font-size:12px;color:#94a3b8;margin-bottom:8px}.bb-profile-bio{font-size:13px;color:#475569;line-height:1.5;padding:8px;background:#f8fafc;border-radius:8px;margin:8px 0}.bb-profile-role{font-size:11px;padding:2px 10px;border-radius:10px;background:#fff7ed;color:#c2410c;font-weight:600;display:inline-block}
+    .bb-bio-preview{margin-top:12px;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0}.bb-bio-label{font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;margin-bottom:4px}.bb-bio-text{font-size:13px;color:#475569}
+    .bb-announcement{background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px 16px;font-size:13px;color:#c2410c;margin-bottom:12px;font-weight:500}
+    .bb-profile-error{text-align:center;padding:20px;color:#94a3b8;font-size:13px}
+  </style>
+</head>
+<body>
+  <div class="bb-topbar">
+    <div class="brand">BuzzBoard</div>
+    <div class="nav">
+      <a href="#" class="active">Feed</a>
+      <a href="#">Explore</a>
+      <a href="#">Messages</a>
+      <a href="#">Groups</a>
+    </div>
+    <div class="actions">
+      <div class="notif">🔔<div class="dot"></div></div>
+      <div class="me">YO</div>
+    </div>
+  </div>
+
+  <div class="bb-layout">
+    <div class="bb-main">
+      <div class="bb-compose">
+        <textarea id="bb-post-input" placeholder="What's on your mind?"></textarea>
+        <div class="bb-compose-actions">
+          <button class="post-btn" id="bb-post-btn">Post</button>
+        </div>
+      </div>
+      <div id="bb-feed"></div>
+    </div>
+
+    <div class="bb-aside">
+      <div class="bb-card" id="bb-profile-card">
+        <h3>Your Profile</h3>
+        <div style="font-size:13px;color:#94a3b8;padding:8px 0">Loading profile...</div>
+      </div>
+      <div class="bb-card">
+        <h3>Suggested People</h3>
+        <div class="item"><div class="mini-avatar">DK</div><div>David Kim &middot; Engineering</div></div>
+        <div class="item"><div class="mini-avatar">LP</div><div>Lisa Park &middot; Design</div></div>
+        <div class="item"><div class="mini-avatar">RJ</div><div>Raj Patel &middot; Product</div></div>
+      </div>
+      <div class="bb-card">
+        <h3>Trending Topics</h3>
+        <div style="font-size:13px;color:#475569;line-height:2">#product-launch<br>#engineering<br>#team-building<br>#remote-work</div>
+      </div>
+    </div>
+  </div>
+
+  <!--
+    Vulnerability is in the external social-feed.js file.
+    The app has a sanitize() function used in SOME places but not all.
+    Find where unsanitized user input reaches a dangerous sink.
+    Source is in the URL hash parameters.
+  -->
+  <script src="/js/apps/social-feed.js"></script>
+  <script src="/js/app.js"></script>
+  <script>setupLabVerification('xss-hunt-3', 'xss');</script>
+</body>
+</html>

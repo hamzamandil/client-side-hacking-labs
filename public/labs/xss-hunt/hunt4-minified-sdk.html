@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HelpDesk Pro - Customer Portal</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#fff;color:#1e293b}
+    .hd-nav{background:#fff;border-bottom:1px solid #e5e7eb;height:56px;display:flex;align-items:center;padding:0 32px;justify-content:space-between}.hd-nav .brand{font-weight:800;font-size:17px;color:#0ea5e9}.hd-nav .links{display:flex;gap:24px;font-size:14px}.hd-nav .links a{color:#6b7280;text-decoration:none;font-weight:500}.hd-nav .links a:hover{color:#111827}.hd-nav .right{display:flex;align-items:center;gap:12px;font-size:13px;color:#6b7280}
+    .hd-hero{background:linear-gradient(135deg,#0ea5e9 0%,#2563eb 100%);color:#fff;padding:64px 32px;text-align:center}.hd-hero h1{font-size:32px;font-weight:800;margin-bottom:8px}.hd-hero p{font-size:16px;opacity:.85;max-width:500px;margin:0 auto 24px}.hd-search{max-width:480px;margin:0 auto;display:flex;gap:8px}.hd-search input{flex:1;padding:12px 18px;border:none;border-radius:10px;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,.15)}.hd-search input:focus{outline:none}.hd-search button{padding:12px 24px;background:#fff;color:#0ea5e9;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+    .hd-content{max-width:960px;margin:0 auto;padding:40px 24px}.hd-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:40px}.hd-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;text-align:center;transition:all .2s;cursor:pointer}.hd-card:hover{border-color:#bae6fd;box-shadow:0 4px 16px rgba(14,165,233,.08)}.hd-card .icon{font-size:28px;margin-bottom:10px}.hd-card h3{font-size:15px;font-weight:600;margin-bottom:4px}.hd-card p{font-size:13px;color:#6b7280}
+    .hd-articles h2{font-size:18px;font-weight:700;margin-bottom:16px}.hd-article{display:flex;align-items:center;gap:12px;padding:14px 18px;background:#f9fafb;border-radius:10px;margin-bottom:8px;text-decoration:none;color:inherit;transition:all .15s}.hd-article:hover{background:#f0f9ff}.hd-article .dot{width:8px;height:8px;border-radius:50%;background:#0ea5e9;flex-shrink:0}.hd-article .title{font-size:14px;font-weight:500}.hd-article .meta{font-size:12px;color:#9ca3af;margin-left:auto}
+    [data-ek-tip-target]{cursor:help;border-bottom:1px dashed #cbd5e1}
+    .ek-tooltip{position:fixed;background:#1e293b;color:#e2e8f0;padding:6px 12px;border-radius:6px;font-size:12px;z-index:10000;max-width:300px;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+    .ek-banner{position:fixed;top:0;left:0;right:0;padding:12px 20px;text-align:center;font-size:13px;font-weight:500;z-index:9999;display:flex;justify-content:center;align-items:center;gap:8px}
+    #ek-widget-render-target{min-height:20px;margin-top:16px}
+  </style>
+</head>
+<body>
+  <div class="hd-nav">
+    <div class="brand">HelpDesk Pro</div>
+    <div class="links">
+      <a href="#">Home</a>
+      <a href="#">Knowledge Base</a>
+      <a href="#">Community</a>
+      <a href="#">Contact</a>
+    </div>
+    <div class="right">
+      <a href="#" style="color:#0ea5e9;font-weight:600;text-decoration:none">Sign In</a>
+    </div>
+  </div>
+
+  <div class="hd-hero">
+    <h1>How can we help?</h1>
+    <p>Search our knowledge base or browse categories below</p>
+    <div class="hd-search">
+      <input type="text" placeholder="Search for answers..." data-ek-tip-target>
+      <button>Search</button>
+    </div>
+  </div>
+
+  <div class="hd-content">
+    <div class="hd-grid">
+      <div class="hd-card"><div class="icon">🚀</div><h3>Getting Started</h3><p>Setup guides and tutorials</p></div>
+      <div class="hd-card"><div class="icon">💳</div><h3>Billing & Plans</h3><p>Subscriptions and payments</p></div>
+      <div class="hd-card"><div class="icon">🔧</div><h3>Technical Support</h3><p>Troubleshooting and fixes</p></div>
+      <div class="hd-card"><div class="icon">🔒</div><h3>Security</h3><p data-ek-tooltip="Security best practices for your account" data-ek-tooltip-html="true">Account security</p></div>
+      <div class="hd-card"><div class="icon">📱</div><h3>Mobile App</h3><p>iOS and Android help</p></div>
+      <div class="hd-card"><div class="icon">🔗</div><h3>Integrations</h3><p>Connect third-party tools</p></div>
+    </div>
+
+    <div class="hd-articles">
+      <h2>Popular Articles</h2>
+      <a class="hd-article" href="#"><div class="dot"></div><div class="title">How to reset your password</div><div class="meta">Updated 2d ago</div></a>
+      <a class="hd-article" href="#"><div class="dot"></div><div class="title">Setting up two-factor authentication</div><div class="meta">Updated 1w ago</div></a>
+      <a class="hd-article" href="#"><div class="dot"></div><div class="title">Managing team member permissions</div><div class="meta">Updated 2w ago</div></a>
+      <a class="hd-article" href="#"><div class="dot"></div><div class="title">Connecting Slack integration</div><div class="meta">Updated 3w ago</div></a>
+      <a class="hd-article" href="#"><div class="dot"></div><div class="title">Understanding your billing cycle</div><div class="meta">Updated 1m ago</div></a>
+    </div>
+
+    <div id="ek-widget-render-target"></div>
+  </div>
+
+  <!--
+    This page loads EmbedKit - a MINIFIED third-party widget SDK.
+    The SDK handles tooltips, banners, widgets, and postMessage communication.
+    You need to beautify the minified code and find ALL the XSS sinks.
+
+    There are at least 5 different attack vectors:
+    1. URL parameter → innerHTML (via a display function)
+    2. URL parameter → createContextualFragment (via postMessage handler)
+    3. URL parameter → eval() (via postMessage handler)
+    4. URL parameter → location.href (via postMessage handler)
+    5. URL parameter → tooltip with html:true option
+
+    Some use query params, some use postMessage, some use both.
+    Good luck.
+  -->
+  <script src="/js/apps/embed-sdk.min.js"></script>
+  <script>EmbedKit.init();</script>
+  <script src="/js/app.js"></script>
+  <script>setupLabVerification('xss-hunt-4', 'xss');</script>
+</body>
+</html>
