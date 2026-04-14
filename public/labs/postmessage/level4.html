@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: PostMessage + iframe Sandbox Escape - Level 4</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">PostMessage #4: iframe Sandbox Escape</span>
+      <span class="difficulty hard">Hard</span>
+    </div>
+  </div>
+
+  <div id="solve-banner" class="solve-banner"></div>
+
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Execute <code>alert('XSS')</code> in the context of the PARENT page (not the iframe). The parent page trusts messages from iframes with a specific origin and renders them. The iframe content is user-controlled via a URL parameter.</p>
+      </div>
+
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: The architecture</button>
+        <div class="hint-content">The parent page embeds an iframe that loads <code>/labs/postmessage/widget-frame.html</code>. The iframe sends data to the parent via postMessage, and the parent renders it. The parent checks that messages come from <code>http://localhost:3000</code>.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: The iframe input</button>
+        <div class="hint-content">The iframe page accepts a <code>?content=</code> parameter and renders it. But the iframe has <code>sandbox="allow-scripts allow-same-origin"</code>. Since it's same-origin, its postMessages pass the parent's origin check. Control the iframe content by setting the content parameter.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: The attack flow</button>
+        <div class="hint-content">
+          1. The iframe loads with your content parameter<br>
+          2. Your content includes a script that calls <code>parent.postMessage()</code><br>
+          3. The parent receives the message — it passes the origin check because the iframe is same-origin<br>
+          4. The parent renders the message content via innerHTML<br>
+          Try: <code>?content=&lt;script&gt;parent.postMessage(JSON.stringify({type:'widgetData',html:'&lt;img src=x onerror=alert(\\\"XSS\\\")&gt;'}),'*')&lt;/script&gt;</code>
+        </div>
+      </div>
+
+      <h3>Vulnerable Code (Parent)</h3>
+      <div class="source-code">
+<pre><span class="comment">// Parent trusts same-origin iframe messages</span>
+window.<span class="function">addEventListener</span>('message', (e) => {
+  <span class="keyword">if</span> (e.origin !== location.origin) <span class="keyword">return</span>;
+
+  <span class="keyword">var</span> data = JSON.parse(e.data);
+  <span class="keyword">if</span> (data.type === 'widgetData') {
+    <span class="comment">// Renders widget HTML from iframe</span>
+    widget.<span class="sink">innerHTML</span> = data.html;
+  }
+});
+
+<span class="comment">// Iframe loads user-controlled content param</span>
+&lt;iframe <span class="function">sandbox</span>="allow-scripts allow-same-origin"
+  src="/widget-frame.html<span class="sink">?content=USER_INPUT</span>"
+&gt;&lt;/iframe&gt;
+</pre>
+      </div>
+    </div>
+
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <h2>&#128230; Embedded Widget Platform</h2>
+        </div>
+
+        <div class="lab-form">
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">This page loads a sandboxed widget iframe. The iframe can send data to the parent for display. Try controlling the iframe's content parameter to inject a script that messages the parent.</p>
+
+          <label>Widget Content (modifies iframe ?content= param)</label>
+          <textarea id="widgetContent" rows="3" placeholder="Hello! This is widget content."></textarea>
+          <button class="btn btn-primary" onclick="loadWidget()">Load Widget</button>
+        </div>
+
+        <div style="margin-top:16px">
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">Widget Output (rendered by parent from iframe postMessage):</h3>
+          <div id="widget-output" class="vuln-output" style="min-height:60px">
+            <p style="color:var(--text-muted)">Waiting for widget data...</p>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">Sandboxed Widget iframe:</h3>
+          <div class="iframe-container">
+            <iframe id="widget-iframe" sandbox="allow-scripts allow-same-origin" src="/labs/postmessage/widget-frame.html?content=Welcome%20to%20the%20widget!" style="width:100%;min-height:150px;border:none;background:var(--bg-card)"></iframe>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="attacker-console">
+            <div class="title">PostMessage Log</div>
+            <div id="msg-log">
+              <div class="log" style="color:var(--text-muted)">Waiting for messages from iframe...</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:8px">
+          <p style="font-size:13px;color:var(--text-muted)">
+            <strong>Real-world context:</strong> Many apps use iframes for isolating third-party content (embeds, widgets, ads). The <code>sandbox</code> attribute restricts iframe capabilities, but <code>allow-scripts allow-same-origin</code> together effectively negate the sandbox — the iframe can run scripts AND it's treated as same-origin, so its postMessages pass origin checks.
+          </p>
+          <p style="font-size:13px;color:var(--text-muted);margin-top:8px">
+            <strong>Bug bounty tip:</strong> Look for iframes with <code>sandbox="allow-scripts allow-same-origin"</code> where the iframe URL has user-controlled parameters. This combination is explicitly warned against in the HTML spec because it allows the iframe to remove its own sandbox.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('postmsg-4', 'xss');
+
+    var msgLog = document.getElementById('msg-log');
+
+    function loadWidget() {
+      var content = document.getElementById('widgetContent').value;
+      var iframe = document.getElementById('widget-iframe');
+      iframe.src = '/labs/postmessage/widget-frame.html?content=' + encodeURIComponent(content);
+    }
+
+    // === VULNERABLE CODE ===
+    // Parent page listens for messages from the iframe
+    window.addEventListener('message', function(e) {
+      // Origin check — only accept from same origin
+      // This SEEMS safe, but the iframe is same-origin due to sandbox="allow-same-origin"
+      if (e.origin !== location.origin) {
+        msgLog.innerHTML += '<div class="log" style="color:var(--danger)">Blocked message from: ' + e.origin + '</div>';
+        return;
+      }
+
+      msgLog.innerHTML += '<div class="log" style="color:var(--success)">Accepted message from: ' + e.origin + '</div>';
+
+      try {
+        var data;
+        if (typeof e.data === 'string') {
+          data = JSON.parse(e.data);
+        } else {
+          data = e.data;
+        }
+
+        if (data.type === 'widgetData') {
+          // VULNERABLE: innerHTML with data from iframe
+          msgLog.innerHTML += '<div class="log">Rendering widget HTML (' + (data.html || '').length + ' chars)</div>';
+          document.getElementById('widget-output').innerHTML = data.html;
+        } else if (data.type === 'widgetReady') {
+          msgLog.innerHTML += '<div class="log">Widget iframe ready</div>';
+        }
+      } catch(err) {
+        msgLog.innerHTML += '<div class="log" style="color:var(--danger)">Parse error: ' + err.message + '</div>';
+      }
+    });
+  </script>
+</body>
+</html>

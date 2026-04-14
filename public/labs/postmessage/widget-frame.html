@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Widget Frame</title>
+  <style>
+    body { font-family: sans-serif; background: #1e293b; color: #e2e8f0; padding: 16px; margin: 0; }
+    .widget-box { background: #0f172a; border-radius: 8px; padding: 12px; }
+  </style>
+</head>
+<body>
+  <div class="widget-box">
+    <div style="font-size:11px;color:#64748b;margin-bottom:8px">Widget Frame (sandboxed iframe)</div>
+    <div id="content"></div>
+  </div>
+
+  <script>
+    // This iframe renders content from the URL parameter
+    var params = new URLSearchParams(location.search);
+    var content = params.get('content') || 'No content';
+
+    // VULNERABLE: renders URL parameter as HTML (but this is "in the iframe")
+    // The real danger is that scripts here can postMessage to the parent
+    document.getElementById('content').innerHTML = content;
+
+    // Notify parent that widget is ready
+    try {
+      parent.postMessage(JSON.stringify({ type: 'widgetReady' }), '*');
+    } catch(e) {}
+  </script>
+</body>
+</html>

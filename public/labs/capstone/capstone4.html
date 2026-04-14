@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SecureAuth - Login</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { background: #f9fafb; margin: 0; font-family: 'Inter', -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    .auth-container { width: 100%; max-width: 420px; padding: 0 24px; }
+    .auth-logo { text-align: center; margin-bottom: 32px; }
+    .auth-logo h1 { font-size: 24px; color: #111827; }
+    .auth-logo p { color: #6b7280; font-size: 14px; }
+    .auth-card { background: white; border: 1px solid #e5e7eb; border-radius: 16px; padding: 32px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+    .auth-card h2 { font-size: 20px; color: #111827; margin-bottom: 4px; }
+    .auth-card .subtitle { color: #6b7280; font-size: 14px; margin-bottom: 24px; }
+    .auth-field { margin-bottom: 16px; }
+    .auth-field label { display: block; font-size: 13px; color: #374151; font-weight: 500; margin-bottom: 4px; }
+    .auth-field input { width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; box-sizing: border-box; }
+    .auth-field input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+    .auth-btn { width: 100%; padding: 12px; background: #6366f1; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 15px; cursor: pointer; margin-top: 8px; }
+    .auth-btn:hover { background: #4f46e5; }
+    .auth-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; color: #9ca3af; font-size: 13px; }
+    .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: #e5e7eb; }
+    .oauth-btn { width: 100%; padding: 12px; background: white; border: 1px solid #d1d5db; border-radius: 8px; font-weight: 500; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px; color: #374151; }
+    .oauth-btn:hover { background: #f9fafb; border-color: #9ca3af; }
+    .auth-footer { text-align: center; margin-top: 20px; font-size: 13px; color: #6b7280; }
+    .auth-footer a { color: #6366f1; }
+    .user-panel { display: none; }
+    .user-panel.show { display: block; }
+    .user-info { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 20px; margin-top: 16px; text-align: center; }
+  </style>
+</head>
+<body class="capstone-app">
+  <div id="solve-banner" class="capstone-solve-banner"></div>
+
+  <div class="auth-container">
+    <div class="auth-logo">
+      <h1>&#128274; SecureAuth</h1>
+      <p>Enterprise-grade authentication</p>
+    </div>
+
+    <div class="auth-card" id="login-card">
+      <h2>Welcome back</h2>
+      <p class="subtitle">Sign in to your account</p>
+
+      <form onsubmit="doLocalLogin(event)">
+        <div class="auth-field">
+          <label>Email</label>
+          <input type="email" id="emailInput" placeholder="you@company.com" value="victim@example.com">
+        </div>
+        <div class="auth-field">
+          <label>Password</label>
+          <input type="password" id="passwordInput" placeholder="Enter password" value="password123">
+        </div>
+        <button type="submit" class="auth-btn">Sign In</button>
+      </form>
+
+      <div class="auth-divider">or continue with</div>
+
+      <button class="oauth-btn" onclick="startOAuthLogin()">&#127760; Sign in with SSO (OAuth)</button>
+
+      <div class="auth-footer">
+        Don't have an account? <a href="#">Sign up</a>
+      </div>
+    </div>
+
+    <div class="user-panel" id="user-panel">
+      <div class="auth-card">
+        <h2>Welcome!</h2>
+        <div class="user-info" id="user-info">Loading...</div>
+        <button class="auth-btn" onclick="doLogout()" style="background:#ef4444;margin-top:16px">Sign Out</button>
+      </div>
+    </div>
+
+    <div id="oauth-status" style="margin-top:12px;font-size:13px;color:#6b7280;text-align:center"></div>
+  </div>
+
+  <a href="/labs/capstone/hints/hints4.html" class="capstone-hint-btn">&#128161; Need help?</a>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('cap-4', 'xss');
+
+    function doLocalLogin(e) {
+      e.preventDefault();
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ username: 'victim', password: document.getElementById('passwordInput').value })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.success) showUser(d.user);
+      });
+    }
+
+    function startOAuthLogin() {
+      // Initiate OAuth flow — redirect_uri is set here
+      var redirectUri = 'http://localhost:3000/labs/capstone/capstone4.html';
+      var url = '/oauth/authorize?client_id=vuln-app&response_type=code&state=secureauth_' + Date.now() +
+        '&redirect_uri=' + encodeURIComponent(redirectUri);
+      window.location.href = url;
+    }
+
+    function showUser(user) {
+      document.getElementById('login-card').style.display = 'none';
+      var panel = document.getElementById('user-panel');
+      panel.classList.add('show');
+      document.getElementById('user-info').innerHTML =
+        '<div style="font-size:16px;font-weight:600;color:#16a34a">Signed in as ' + user.username + '</div>' +
+        '<div style="color:#6b7280;margin-top:4px">' + user.email + '</div>' +
+        '<div style="color:#6b7280;font-size:12px;margin-top:4px">Role: ' + user.role + '</div>';
+    }
+
+    function doLogout() {
+      fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).then(function() { location.reload(); });
+    }
+
+    // Handle OAuth callback — check for code or token in URL
+    var params = new URLSearchParams(location.search);
+    var code = params.get('code');
+    var hash = location.hash ? new URLSearchParams(location.hash.substring(1)) : null;
+    var token = hash ? hash.get('access_token') : null;
+
+    if (code) {
+      document.getElementById('oauth-status').textContent = 'OAuth code received: ' + code.substring(0, 16) + '... Exchanging for token...';
+      // Exchange code for token
+      fetch('/oauth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code, client_id: 'vuln-app', client_secret: 'secret123', grant_type: 'authorization_code' })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.access_token) {
+          document.getElementById('oauth-status').textContent = 'Authenticated via OAuth!';
+          // Get user info
+          return fetch('/oauth/userinfo', { headers: { 'Authorization': 'Bearer ' + d.access_token } });
+        }
+      })
+      .then(function(r) { return r ? r.json() : null; })
+      .then(function(user) { if (user) showUser(user); });
+    }
+
+    if (token) {
+      document.getElementById('oauth-status').textContent = 'Token received in URL fragment!';
+      fetch('/oauth/userinfo', { headers: { 'Authorization': 'Bearer ' + token } })
+        .then(function(r) { return r.json(); })
+        .then(function(user) { showUser(user); });
+    }
+
+    // The OAuth flow uses the /oauth/authorize endpoint which has:
+    // - Weak redirect_uri validation (prefix-based, allows path traversal)
+    // - Support for response_type=token (implicit flow, token in fragment)
+    // - The /redirect?url= open redirect that can be chained
+
+    // Check if already logged in
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(function(r) { return r.json(); })
+      .then(function(d) { if (d.user) showUser(d.user); })
+      .catch(function() {});
+  </script>
+</body>
+</html>

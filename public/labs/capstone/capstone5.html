@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SocialHub - Connect with friends</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { background: #f3f4f6; margin: 0; font-family: 'Inter', -apple-system, sans-serif; }
+    .sh-header { background: white; border-bottom: 1px solid #e5e7eb; padding: 10px 32px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; }
+    .sh-header h1 { font-size: 20px; color: #2563eb; font-weight: 800; }
+    .sh-header .search-bar { display: flex; gap: 8px; }
+    .sh-header .search-bar input { padding: 8px 14px; border: 1px solid #e5e7eb; border-radius: 20px; font-size: 13px; width: 260px; }
+    .sh-header .search-bar button { background: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .sh-header nav a { color: #6b7280; margin-left: 20px; font-size: 14px; text-decoration: none; }
+    .sh-layout { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: 260px 1fr; gap: 20px; padding: 20px; }
+    .sh-profile-card { background: white; border-radius: 12px; border: 1px solid #e5e7eb; padding: 24px; text-align: center; position: sticky; top: 70px; }
+    .sh-avatar { width: 80px; height: 80px; border-radius: 50%; background: #dbeafe; margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; font-size: 32px; }
+    .sh-username { font-size: 18px; font-weight: 700; color: #111827; }
+    .sh-email { font-size: 13px; color: #6b7280; margin-bottom: 12px; }
+    .sh-bio { font-size: 14px; color: #374151; padding: 8px 0; border-top: 1px solid #f3f4f6; }
+    .sh-feed { }
+    .sh-compose { background: white; border-radius: 12px; border: 1px solid #e5e7eb; padding: 16px; margin-bottom: 16px; }
+    .sh-compose textarea { width: 100%; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; font-size: 14px; resize: none; box-sizing: border-box; }
+    .sh-compose button { background: #2563eb; color: white; border: none; padding: 8px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+    .sh-post { background: white; border-radius: 12px; border: 1px solid #e5e7eb; padding: 16px; margin-bottom: 12px; }
+    .sh-post .author { font-weight: 600; color: #111827; }
+    .sh-post .time { font-size: 12px; color: #9ca3af; }
+    .sh-post .content { margin-top: 8px; color: #374151; font-size: 14px; line-height: 1.6; }
+    .sh-settings-btn { display: block; width: 100%; padding: 10px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; text-align: center; font-size: 13px; color: #6b7280; cursor: pointer; margin-top: 12px; }
+    .sh-settings-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; justify-content: center; align-items: center; }
+    .sh-settings-modal.open { display: flex; }
+    .sh-settings-panel { background: white; border-radius: 16px; padding: 28px; width: 100%; max-width: 440px; }
+    .sh-settings-panel h2 { font-size: 18px; margin-bottom: 16px; }
+    .sh-settings-panel label { display: block; font-size: 13px; color: #374151; font-weight: 500; margin-bottom: 4px; }
+    .sh-settings-panel input, .sh-settings-panel textarea { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; margin-bottom: 12px; box-sizing: border-box; }
+    .sh-settings-panel button { padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    .sh-search-results { margin-bottom: 16px; font-size: 14px; color: #6b7280; }
+  </style>
+</head>
+<body class="capstone-app">
+  <div id="solve-banner" class="capstone-solve-banner"></div>
+
+  <div class="sh-header">
+    <h1>SocialHub</h1>
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="Search posts..." onkeydown="if(event.key==='Enter')doSearch()">
+      <button onclick="doSearch()">Search</button>
+    </div>
+    <nav>
+      <a href="#" id="loginLink" onclick="doLogin()">Sign in</a>
+      <a href="#" onclick="openSettings()">Settings</a>
+    </nav>
+  </div>
+
+  <div class="sh-layout">
+    <div>
+      <div class="sh-profile-card">
+        <div class="sh-avatar">&#128100;</div>
+        <div class="sh-username" id="prof-name">Guest</div>
+        <div class="sh-email" id="prof-email">Not signed in</div>
+        <div class="sh-bio" id="prof-bio">Sign in to see your profile</div>
+        <button class="sh-settings-btn" onclick="openSettings()">Edit Profile</button>
+      </div>
+    </div>
+
+    <div class="sh-feed">
+      <div id="search-results" class="sh-search-results"></div>
+
+      <div class="sh-compose" id="compose-area" style="display:none">
+        <textarea id="postContent" rows="3" placeholder="What's on your mind?"></textarea>
+        <button onclick="createPost()">Post</button>
+      </div>
+
+      <div id="feed-posts">
+        <div class="sh-post">
+          <div class="author">admin <span class="time">&middot; 2 hours ago</span></div>
+          <div class="content">Welcome to SocialHub! This is a demo social network. Try creating posts, searching, and editing your profile.</div>
+        </div>
+        <div class="sh-post">
+          <div class="author">victim <span class="time">&middot; 5 hours ago</span></div>
+          <div class="content">Just signed up! Looking forward to connecting with everyone.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="sh-settings-modal" id="settingsModal">
+    <div class="sh-settings-panel">
+      <h2>Profile Settings</h2>
+      <label>Email</label>
+      <input type="email" id="set-email">
+      <label>Bio (HTML allowed for formatting)</label>
+      <textarea id="set-bio" rows="3"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="closeSettings()" style="background:#f3f4f6;color:#374151">Cancel</button>
+        <button onclick="saveSettings()" style="background:#2563eb;color:white">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <a href="/labs/capstone/hints/hints5.html" class="capstone-hint-btn">&#128161; Need help?</a>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('cap-5', 'xss');
+
+    function doLogin() {
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ username: 'victim', password: 'password123' })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.success) {
+          loadProfile();
+          document.getElementById('compose-area').style.display = 'block';
+          document.getElementById('loginLink').textContent = d.user.username;
+        }
+      });
+    }
+
+    function loadProfile() {
+      fetch('/api/auth/me', { credentials: 'include' })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (d.user) {
+            document.getElementById('prof-name').textContent = d.user.username;
+            document.getElementById('prof-email').textContent = d.user.email;
+            document.getElementById('compose-area').style.display = 'block';
+            document.getElementById('loginLink').textContent = d.user.username;
+            document.getElementById('set-email').value = d.user.email;
+
+            // Load full profile with bio
+            fetch('/api/user/profile/' + d.user.username)
+              .then(function(r) { return r.json(); })
+              .then(function(p) {
+                // VULNERABLE: innerHTML renders bio (stored XSS sink)
+                document.getElementById('prof-bio').innerHTML = p.bio || 'No bio set';
+                document.getElementById('set-bio').value = p.bio || '';
+              });
+
+            // Check for ATO
+            if (d.user.email === 'attacker@evil.com') {
+              solveLab('cap-5');
+            }
+          }
+        }).catch(function(){});
+    }
+
+    function doSearch() {
+      var q = document.getElementById('searchInput').value;
+      var el = document.getElementById('search-results');
+      if (q) {
+        // VULNERABLE: innerHTML with search query (DOM XSS)
+        el.innerHTML = 'Search results for: <strong>' + q + '</strong>';
+      } else {
+        el.innerHTML = '';
+      }
+    }
+
+    // Check URL for search param
+    var sp = new URLSearchParams(location.search);
+    if (sp.get('q')) {
+      document.getElementById('searchInput').value = sp.get('q');
+      // VULNERABLE: innerHTML with URL parameter
+      document.getElementById('search-results').innerHTML = 'Search results for: <strong>' + sp.get('q') + '</strong>';
+    }
+
+    function openSettings() { document.getElementById('settingsModal').classList.add('open'); }
+    function closeSettings() { document.getElementById('settingsModal').classList.remove('open'); }
+
+    function saveSettings() {
+      var email = document.getElementById('set-email').value;
+      var bio = document.getElementById('set-bio').value;
+
+      // VULNERABLE: No CSRF token on profile update
+      fetch('/api/user/profile/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ bio: bio })
+      }).then(function() {
+        // VULNERABLE: No CSRF token on email change
+        return fetch('/api/user/change-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ email: email })
+        });
+      }).then(function() {
+        closeSettings();
+        loadProfile();
+      });
+    }
+
+    function createPost() {
+      var content = document.getElementById('postContent').value;
+      if (!content.trim()) return;
+      fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ content: content })
+      }).then(function() {
+        document.getElementById('postContent').value = '';
+        var posts = document.getElementById('feed-posts');
+        posts.innerHTML = '<div class="sh-post"><div class="author">You <span class="time">&middot; Just now</span></div><div class="content">' + content.replace(/</g, '&lt;') + '</div></div>' + posts.innerHTML;
+      });
+    }
+
+    // Auto-check login
+    loadProfile();
+  </script>
+</body>
+</html>

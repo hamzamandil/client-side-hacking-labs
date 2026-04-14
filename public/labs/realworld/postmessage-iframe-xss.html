@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CloudDocs - Document Management</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', -apple-system, sans-serif; background: #f9fafb; color: #111827; }
+    .topnav { background: #fff; border-bottom: 1px solid #e5e7eb; height: 50px; display: flex; align-items: center; padding: 0 20px; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
+    .topnav .brand { font-weight: 800; font-size: 16px; color: #4f46e5; }
+    .topnav .nav-center { display: flex; gap: 20px; }
+    .topnav .nav-center a { font-size: 13px; color: #6b7280; text-decoration: none; font-weight: 500; padding: 4px 0; }
+    .topnav .nav-center a:hover { color: #111827; }
+    .topnav .nav-center a.active { color: #4f46e5; border-bottom: 2px solid #4f46e5; }
+    .topnav .nav-right { display: flex; align-items: center; gap: 12px; }
+    .topnav .notif-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; position: relative; }
+    .topnav .notif-btn .badge { position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; }
+    .topnav .user-avatar { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .layout { display: flex; min-height: calc(100vh - 50px); }
+    .sidebar { width: 240px; background: #fff; border-right: 1px solid #e5e7eb; padding: 20px 0; flex-shrink: 0; }
+    .sidebar .section-label { font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; padding: 0 16px; margin-bottom: 8px; margin-top: 20px; }
+    .sidebar .section-label:first-child { margin-top: 0; }
+    .sidebar a { display: flex; align-items: center; gap: 10px; padding: 8px 16px; font-size: 13px; color: #4b5563; text-decoration: none; font-weight: 500; }
+    .sidebar a:hover { background: #f9fafb; color: #111827; }
+    .sidebar a.active { background: #eef2ff; color: #4f46e5; }
+    .content { flex: 1; padding: 28px 32px; }
+    .page-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+    .page-desc { font-size: 13px; color: #6b7280; margin-bottom: 24px; }
+    .doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+    .doc-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; cursor: pointer; transition: all 0.15s; }
+    .doc-card:hover { border-color: #c7d2fe; box-shadow: 0 2px 8px rgba(79,70,229,0.08); }
+    .doc-card .doc-icon { font-size: 28px; margin-bottom: 10px; }
+    .doc-card .doc-name { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .doc-card .doc-meta { font-size: 11px; color: #9ca3af; }
+    .toolbar { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+    .toolbar .search-box { flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 13px; background: #fff; }
+    .toolbar .search-box:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+    .btn-sm { padding: 7px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid #e5e7eb; background: #fff; color: #374151; }
+    .btn-sm:hover { background: #f9fafb; }
+    .btn-primary-sm { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+    .btn-primary-sm:hover { background: #4338ca; }
+    .floating-container { position: fixed; bottom: 0; right: 0; z-index: 100; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; padding: 16px; }
+    .floating-btn { width: 48px; height: 48px; border-radius: 50%; background: #4f46e5; color: white; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 12px rgba(79,70,229,0.3); display: flex; align-items: center; justify-content: center; }
+    .floating-btn:hover { background: #4338ca; transform: scale(1.05); }
+    .floating-menu { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); overflow: hidden; display: none; min-width: 200px; }
+    .floating-menu.open { display: block; }
+    .floating-menu a { display: flex; align-items: center; gap: 10px; padding: 12px 16px; font-size: 13px; color: #374151; text-decoration: none; font-weight: 500; border-bottom: 1px solid #f3f4f6; }
+    .floating-menu a:last-child { border-bottom: none; }
+    .floating-menu a:hover { background: #f9fafb; }
+    #floating-pages { position: fixed; bottom: 80px; right: 16px; z-index: 90; display: flex; flex-direction: column; gap: 8px; }
+    .toast { position: fixed; top: 60px; right: 16px; background: #065f46; color: white; padding: 12px 20px; border-radius: 10px; font-size: 13px; font-weight: 500; display: none; z-index: 1000; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+    .toast.show { display: block; animation: fadeIn 0.3s ease; }
+    .toast.error { background: #991b1b; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    #login-wall { position: fixed; inset: 0; background: #1e1b4b; display: flex; align-items: center; justify-content: center; z-index: 9999; }
+    .login-form { background: #312e81; padding: 36px; border-radius: 16px; width: 340px; color: #e0e7ff; }
+    .login-form h2 { font-size: 22px; font-weight: 800; color: #c7d2fe; margin-bottom: 4px; }
+    .login-form .sub { font-size: 13px; color: #818cf8; margin-bottom: 24px; }
+    .login-form input { width: 100%; padding: 10px 14px; background: #1e1b4b; border: 1px solid #4338ca; border-radius: 8px; color: #e0e7ff; font-size: 14px; margin-bottom: 10px; }
+    .login-form button { width: 100%; padding: 10px; background: #4f46e5; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <div id="login-wall">
+    <div class="login-form">
+      <h2>CloudDocs</h2>
+      <div class="sub">Secure document management</div>
+      <input type="text" id="lg-user" placeholder="Username" value="victim">
+      <input type="password" id="lg-pass" placeholder="Password" value="password123">
+      <button onclick="doLogin()">Sign In</button>
+      <p style="font-size:11px;color:#6366f1;margin-top:10px;text-align:center">Demo: victim / password123</p>
+    </div>
+  </div>
+
+  <nav class="topnav">
+    <div class="brand">CloudDocs</div>
+    <div class="nav-center">
+      <a href="#" class="active">Documents</a>
+      <a href="#">Shared</a>
+      <a href="#">Templates</a>
+      <a href="#">Trash</a>
+    </div>
+    <div class="nav-right">
+      <button class="notif-btn">🔔<div class="badge"></div></button>
+      <div class="user-avatar" id="nav-avatar">?</div>
+    </div>
+  </nav>
+
+  <div class="layout">
+    <div class="sidebar">
+      <div class="section-label">Quick Access</div>
+      <a href="#" class="active">📄 My Documents</a>
+      <a href="#">⭐ Starred</a>
+      <a href="#">🕐 Recent</a>
+      <div class="section-label">Folders</div>
+      <a href="#">📁 Project Alpha</a>
+      <a href="#">📁 Marketing</a>
+      <a href="#">📁 Engineering</a>
+      <a href="#">📁 Finance</a>
+      <div class="section-label">Storage</div>
+      <a href="#"><span style="color:#9ca3af">2.4 GB / 15 GB used</span></a>
+    </div>
+
+    <div class="content">
+      <h1 class="page-title">My Documents</h1>
+      <p class="page-desc">24 documents &middot; Last modified 2 hours ago</p>
+
+      <div class="toolbar">
+        <input class="search-box" type="text" placeholder="Search documents...">
+        <button class="btn-sm">Sort ▾</button>
+        <button class="btn-sm">Filter</button>
+        <button class="btn-sm btn-primary-sm">+ New Document</button>
+      </div>
+
+      <div class="doc-grid">
+        <div class="doc-card"><div class="doc-icon">📊</div><div class="doc-name">Q4 Revenue Report</div><div class="doc-meta">Modified 2h ago &middot; 2.3 MB</div></div>
+        <div class="doc-card"><div class="doc-icon">📝</div><div class="doc-name">Product Roadmap 2025</div><div class="doc-meta">Modified 1d ago &middot; 540 KB</div></div>
+        <div class="doc-card"><div class="doc-icon">📋</div><div class="doc-name">Meeting Notes - Sprint 47</div><div class="doc-meta">Modified 2d ago &middot; 120 KB</div></div>
+        <div class="doc-card"><div class="doc-icon">📑</div><div class="doc-name">Employee Handbook</div><div class="doc-meta">Modified 5d ago &middot; 4.1 MB</div></div>
+        <div class="doc-card"><div class="doc-icon">📈</div><div class="doc-name">Marketing Analytics</div><div class="doc-meta">Modified 1w ago &middot; 890 KB</div></div>
+        <div class="doc-card"><div class="doc-icon">📄</div><div class="doc-name">API Documentation</div><div class="doc-meta">Modified 2w ago &middot; 1.2 MB</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Action Button & Menu (the vulnerable widget system) -->
+  <div class="floating-container">
+    <div class="floating-menu" id="float-menu">
+      <a href="#" onclick="openFloatingPage('help', 'Help Center', '/labs/realworld/help-content.html'); return false;">❓ Help Center</a>
+      <a href="#" onclick="openFloatingPage('chat', 'Live Chat', '/labs/realworld/chat-content.html'); return false;">💬 Live Chat</a>
+      <a href="#" onclick="openFloatingPage('feedback', 'Feedback', '/labs/realworld/feedback-content.html'); return false;">📝 Send Feedback</a>
+    </div>
+    <button class="floating-btn" onclick="toggleMenu()" id="fab-btn">+</button>
+  </div>
+
+  <div id="floating-pages"></div>
+  <div class="toast" id="toast"></div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('rw-postmsg-iframe', 'xss');
+
+    function doLogin() {
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        credentials: 'include',
+        body: JSON.stringify({
+          username: document.getElementById('lg-user').value,
+          password: document.getElementById('lg-pass').value
+        })
+      }).then(function(r){ return r.json(); }).then(function(d){
+        if (d.success) {
+          document.getElementById('login-wall').classList.add('hidden');
+          document.getElementById('nav-avatar').textContent = d.user.username[0].toUpperCase();
+        }
+      });
+    }
+
+    var menuOpen = false;
+    function toggleMenu() {
+      menuOpen = !menuOpen;
+      document.getElementById('float-menu').className = 'floating-menu' + (menuOpen ? ' open' : '');
+      document.getElementById('fab-btn').textContent = menuOpen ? '×' : '+';
+    }
+
+    // Opens a floating page panel using an iframe
+    function openFloatingPage(id, name, url) {
+      toggleMenu();
+      var container = document.getElementById('floating-pages');
+      // Remove if already open
+      var existing = document.getElementById('fp-' + id);
+      if (existing) { existing.remove(); return; }
+
+      var panel = document.createElement('div');
+      panel.id = 'fp-' + id;
+      panel.style.cssText = 'background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12);width:360px;overflow:hidden;';
+      panel.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid #f3f4f6;background:#f9fafb">' +
+          '<span style="font-size:13px;font-weight:600">' + name + '</span>' +
+          '<button onclick="this.closest(\'div[id^=fp-]\').remove()" style="background:none;border:none;cursor:pointer;font-size:16px;color:#9ca3af">×</button>' +
+        '</div>' +
+        '<iframe src="' + url + '" style="width:100%;height:350px;border:none"></iframe>';
+      container.appendChild(panel);
+    }
+
+    // ============================================================
+    // VULNERABLE: postMessage listener for the floating page system
+    // This handles messages from embedded iframes and external sources
+    // It creates iframe elements using unsanitized data from the message
+    // ============================================================
+    window.addEventListener('message', function(event) {
+      // NOTE: No origin check is performed here
+      // The developer assumed only their own iframes would send messages
+
+      if (event.data && event.data.message === 'e:openFloatingPage') {
+        var d = event.data.data;
+        if (d && d.url && d.name && d.id) {
+          var container = document.getElementById('floating-pages');
+
+          // VULNERABLE: No sanitization on url, name, or id
+          // These values are inserted directly into an HTML string
+          // An attacker can break out of the iframe attributes to inject event handlers
+          var panelHtml =
+            '<div id="fp-ext-' + d.id + '" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12);width:360px;overflow:hidden;margin-bottom:8px">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid #f3f4f6;background:#f9fafb">' +
+                '<span style="font-size:13px;font-weight:600">' + d.name + '</span>' +
+                '<button onclick="this.closest(\'div[id^=fp-]\').remove()" style="background:none;border:none;cursor:pointer;font-size:16px;color:#9ca3af">×</button>' +
+              '</div>' +
+              '<iframe src="' + d.url + '" name="' + d.name + '" id="fpf-' + d.id + '" style="width:100%;height:300px;border:none"></iframe>' +
+            '</div>';
+
+          container.insertAdjacentHTML('beforeend', panelHtml);
+        }
+      }
+
+      // Handle other widget messages
+      if (event.data && event.data.type === 'widgetAction') {
+        showToast(event.data.action || 'Widget action received');
+      }
+    });
+
+    function showToast(msg, isError) {
+      var t = document.getElementById('toast');
+      t.className = 'toast show' + (isError ? ' error' : '');
+      t.textContent = msg;
+      setTimeout(function(){ t.className = 'toast'; }, 4000);
+    }
+
+    // Auto-login check
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.user) {
+          document.getElementById('login-wall').classList.add('hidden');
+          document.getElementById('nav-avatar').textContent = d.user.username[0].toUpperCase();
+        }
+      }).catch(function(){});
+  </script>
+</body>
+</html>

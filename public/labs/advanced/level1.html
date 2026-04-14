@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: Prototype Pollution to XSS - Advanced Level 1</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">Advanced #1: Prototype Pollution to XSS</span>
+      <span class="difficulty hard">Hard</span>
+    </div>
+  </div>
+  <div id="solve-banner" class="solve-banner"></div>
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Execute <code>alert('XSS')</code> by exploiting a prototype pollution vulnerability in the URL parameter parser. Pollute <code>Object.prototype</code> to override a config value that flows into a script <code>src</code> attribute.</p>
+      </div>
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: What is Prototype Pollution?</button>
+        <div class="hint-content">JavaScript objects inherit from <code>Object.prototype</code>. If you can set properties on it (e.g., <code>Object.prototype.polluted = true</code>), then every object will have <code>.polluted === true</code> unless it defines its own. A vulnerable parser lets you set <code>__proto__</code> properties via URL params.</div>
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: The vulnerable parser</button>
+        <div class="hint-content">The page uses a custom <code>deparam()</code> function that converts URL query strings into objects. It doesn't block <code>__proto__</code> keys. Try: <code>?__proto__[polluted]=yes</code> and check <code>({}).polluted</code> in the console.</div>
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: The gadget</button>
+        <div class="hint-content">After parsing params, the code reads <code>config.scriptSrc || defaults.scriptSrc</code>. If neither config nor defaults has <code>scriptSrc</code>, it falls back to <code>Object.prototype.scriptSrc</code> (your polluted value!). Try: <code>?__proto__[scriptSrc]=data:text/javascript,alert('XSS')</code></div>
+      </div>
+      <h3>Vulnerable Code</h3>
+      <div class="source-code">
+<pre><span class="comment">// Vulnerable URL param parser</span>
+<span class="keyword">function</span> <span class="function">deparam</span>(qs) {
+  <span class="keyword">var</span> obj = {};
+  qs.split('&').forEach(pair => {
+    <span class="keyword">var</span> [path, val] = pair.split('=');
+    <span class="keyword">var</span> keys = path.split(/[\[\]]+/).filter(Boolean);
+    <span class="keyword">var</span> cur = obj;
+    keys.forEach((k, i) => {
+      <span class="keyword">if</span> (i === keys.length - 1) cur[k] = val;
+      <span class="keyword">else</span> cur = cur[k] = cur[k] || {};
+    });
+  });
+  <span class="keyword">return</span> obj;
+}
+
+<span class="comment">// Gadget: loads script from config</span>
+<span class="keyword">var</span> src = config.<span class="sink">scriptSrc</span>;
+<span class="keyword">if</span> (src) {
+  <span class="keyword">var</span> s = document.createElement('script');
+  s.src = src;
+  document.body.appendChild(s);
+}
+</pre>
+      </div>
+    </div>
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#128161; Widget Dashboard</h2>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">This page loads a dashboard widget. Configuration is parsed from URL parameters using a custom deparam() function.</p>
+          <label>Try a URL parameter (or modify the URL directly)</label>
+          <input type="text" id="paramInput" placeholder="theme=dark&lang=en">
+          <button class="btn btn-primary" onclick="location.search='?'+document.getElementById('paramInput').value">Apply Params</button>
+        </div>
+        <div style="margin-top:16px">
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">Parsed Config:</h3>
+          <div id="config-display" class="vuln-output" style="min-height:60px"></div>
+        </div>
+        <div style="margin-top:12px">
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">Pollution Check:</h3>
+          <div id="pollution-check" class="vuln-output"></div>
+        </div>
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px">
+          <p style="font-size:13px;color:var(--text-secondary)"><strong>Real-world context:</strong> This is based on the HubSpot tracking script prototype pollution finding. The jQuery <code>deparam()</code> function (and many similar URL parsers) didn't block <code>__proto__</code> keys. Combined with "gadgets" — code that reads from object properties and uses them in sinks like <code>script.src</code>, <code>innerHTML</code>, or <code>eval</code> — prototype pollution becomes XSS. This affected every website using HubSpot analytics.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('adv-1', 'xss');
+
+    // VULNERABLE: deparam doesn't block __proto__
+    function deparam(qs) {
+      var obj = {};
+      if (!qs) return obj;
+      qs.replace(/^\?/, '').split('&').forEach(function(pair) {
+        var parts = pair.split('=');
+        var path = decodeURIComponent(parts[0]);
+        var val = parts[1] ? decodeURIComponent(parts[1]) : '';
+        var keys = path.split(/[\[\]]+/).filter(Boolean);
+        var cur = obj;
+        for (var i = 0; i < keys.length; i++) {
+          var k = keys[i];
+          if (i === keys.length - 1) {
+            cur[k] = val;  // VULNERABLE: sets __proto__ properties
+          } else {
+            if (!cur[k] || typeof cur[k] !== 'object') cur[k] = {};
+            cur = cur[k];
+          }
+        }
+      });
+      return obj;
+    }
+
+    // Parse URL params
+    var config = deparam(location.search);
+
+    // Display parsed config
+    document.getElementById('config-display').innerHTML =
+      '<pre style="font-size:12px;color:var(--text-secondary)">' + JSON.stringify(config, null, 2) + '</pre>';
+
+    // Show pollution status
+    var testObj = {};
+    var pollutionHtml = '<div><strong>({}).scriptSrc:</strong> ' + (testObj.scriptSrc || 'undefined') + '</div>' +
+      '<div><strong>({}).polluted:</strong> ' + (testObj.polluted || 'undefined') + '</div>';
+    if (testObj.scriptSrc || testObj.polluted) {
+      pollutionHtml = '<div style="color:var(--danger);font-weight:bold;margin-bottom:4px">Prototype Pollution Detected!</div>' + pollutionHtml;
+    }
+    document.getElementById('pollution-check').innerHTML = pollutionHtml;
+
+    // GADGET: Load script from config
+    // config.scriptSrc is explicitly set only if the user provides it as a normal param
+    // But if __proto__.scriptSrc is polluted, ANY object without its own scriptSrc will inherit it
+    var widgetConfig = {};  // Empty object — inherits from prototype!
+    var scriptUrl = widgetConfig.scriptSrc;
+    if (scriptUrl) {
+      document.getElementById('pollution-check').innerHTML +=
+        '<div style="color:var(--danger);margin-top:8px">Loading script from polluted config: ' + scriptUrl + '</div>';
+      var s = document.createElement('script');
+      s.src = scriptUrl;
+      document.body.appendChild(s);
+    }
+  </script>
+</body>
+</html>

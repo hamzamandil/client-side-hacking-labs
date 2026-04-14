@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: Filter Bypass with Backslash - CSPT Level 2</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">CSPT #2: Filter Bypass with Backslash</span>
+      <span class="difficulty medium">Medium</span>
+    </div>
+  </div>
+
+  <div id="solve-banner" class="solve-banner"></div>
+
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>The app strips forward slashes from the path parameter to prevent CSPT. Bypass the filter using backslashes or double-encoding to reach <code>/api/user/profile/admin</code>.</p>
+      </div>
+
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: What the filter does</button>
+        <div class="hint-content">The code runs <code>userId.replace(/\//g, '')</code> which removes all forward slashes. So <code>../user/profile</code> becomes <code>..userprofile</code>. But what about backslashes?</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: Backslash as path separator</button>
+        <div class="hint-content">Modern browsers treat backslashes (<code>\</code>) as equivalent to forward slashes in URL paths. So <code>..\</code> works the same as <code>../</code>. The filter only removes <code>/</code> but not <code>\</code>.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Payload</button>
+        <div class="hint-content">Try: <code>?userId=..\user\profile\admin</code>. The filter won't remove the backslashes, and the browser resolves <code>/api/settings/..\user\profile\admin</code> to <code>/api/user/profile/admin</code>. Note: you may need to URL-encode the backslashes as <code>%5c</code>.</div>
+      </div>
+
+      <h3>Vulnerable Code</h3>
+      <div class="source-code">
+<pre><span class="keyword">var</span> userId = params.get('userId');
+
+<span class="comment">// "Security" filter: remove forward slashes</span>
+userId = userId.<span class="function">replace</span>(/\//g, '');
+
+<span class="comment">// But backslashes still work as path separators!</span>
+<span class="function">fetch</span>('/api/settings/' + <span class="sink">userId</span>)
+  .then(r => r.json())
+  .then(renderData);
+</pre>
+      </div>
+    </div>
+
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#9881; User Settings</h2>
+          <label>User ID (forward slashes are filtered!)</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="userIdInput" placeholder="general">
+            <button class="btn btn-primary" onclick="loadSettings()">Load Settings</button>
+          </div>
+        </div>
+
+        <div id="filter-log" style="margin-top:12px;font-size:12px;font-family:monospace"></div>
+
+        <div style="margin-top:16px">
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">Settings Data:</h3>
+          <div id="settings-display" class="vuln-output" style="min-height:100px">
+            <p style="color:var(--text-muted)">Loading settings...</p>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">Raw Response:</h3>
+          <div class="source-code">
+            <pre id="raw-json" style="color:#c9d1d9">Loading...</pre>
+          </div>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:8px">
+          <p style="font-size:13px;color:var(--text-muted)">
+            <strong>Real-world context:</strong> The Opera browser cashback feature had this exact bug — an $8,000 bounty. The developer filtered forward slashes but forgot backslashes. Browsers normalize <code>\</code> to <code>/</code> in URL paths before sending HTTP requests. Other bypass techniques:
+          </p>
+          <ul style="font-size:13px;color:var(--text-muted);margin-top:8px;padding-left:20px">
+            <li><code>\</code> instead of <code>/</code> (backslash)</li>
+            <li><code>%2f</code> URL-encoded slash (if filter runs before decode)</li>
+            <li><code>%252f</code> double-encoded slash</li>
+            <li><code>%5c</code> URL-encoded backslash</li>
+            <li><code>..;/</code> semicolon trick (some servers)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('cspt-2', 'xss');
+
+    function loadSettings() {
+      var input = document.getElementById('userIdInput').value;
+      location.search = '?userId=' + encodeURIComponent(input);
+    }
+
+    var params = new URLSearchParams(location.search);
+    var userId = params.get('userId') || 'general';
+    document.getElementById('userIdInput').value = userId;
+
+    var filterLog = document.getElementById('filter-log');
+
+    // Show the original input
+    filterLog.innerHTML = '<div style="color:var(--text-muted)">Original input: <span style="color:var(--warning)">' + userId + '</span></div>';
+
+    // "Security" filter: remove forward slashes
+    var filtered = userId.replace(/\//g, '');
+    filterLog.innerHTML += '<div style="color:var(--text-muted)">After filter (/ removed): <span style="color:var(--accent)">' + filtered + '</span></div>';
+
+    // Build the URL
+    var apiUrl = '/api/settings/' + filtered;
+    filterLog.innerHTML += '<div style="color:var(--text-muted)">Fetch URL: <span style="color:var(--success)">' + apiUrl + '</span></div>';
+
+    // VULNERABLE: backslashes still work as path traversal
+    fetch(apiUrl)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        document.getElementById('raw-json').textContent = JSON.stringify(data, null, 2);
+
+        var display = document.getElementById('settings-display');
+        var html = '';
+
+        if (data.username || data.email) {
+          // Profile data (traversal worked!)
+          html = '<div style="padding:16px;background:rgba(239,68,68,0.1);border:1px solid var(--danger);border-radius:8px">' +
+            '<div style="color:var(--danger);font-weight:bold;margin-bottom:8px">&#9888; CSPT Filter Bypassed! Sensitive Data Exposed!</div>' +
+            '<div><strong>Username:</strong> ' + (data.username || '') + '</div>' +
+            '<div><strong>Email:</strong> ' + (data.email || '') + '</div>' +
+            '<div><strong>Role:</strong> ' + (data.role || '') + '</div>' +
+            '</div>';
+
+          if (data.role === 'admin' || data.username === 'admin') {
+            solveLab('cspt-2');
+          }
+        } else if (data.section) {
+          html = '<div style="padding:12px;background:var(--bg-primary);border-radius:6px">' +
+            '<div><strong>Section:</strong> ' + data.section + '</div>' +
+            '<div><strong>Theme:</strong> ' + data.data.theme + '</div>' +
+            '<div><strong>Language:</strong> ' + data.data.language + '</div>' +
+            '<div><strong>Notifications:</strong> ' + data.data.notifications + '</div>' +
+            '</div>';
+        } else {
+          html = '<pre style="color:var(--text-secondary)">' + JSON.stringify(data, null, 2) + '</pre>';
+        }
+
+        display.innerHTML = html;
+      })
+      .catch(function(err) {
+        document.getElementById('settings-display').innerHTML =
+          '<p style="color:var(--danger)">Error: ' + err.message + '</p>';
+      });
+  </script>
+</body>
+</html>

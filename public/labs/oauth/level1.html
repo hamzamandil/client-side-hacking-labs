@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: OAuth Open Redirect Token Leak - Level 1</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">OAuth #1: Open Redirect Token Leak</span>
+      <span class="difficulty medium">Medium</span>
+    </div>
+  </div>
+
+  <div id="solve-banner" class="solve-banner"></div>
+
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Steal the OAuth authorization code by manipulating the <code>redirect_uri</code> parameter. The OAuth provider has weak redirect_uri validation that only checks if the URI starts with the registered domain.</p>
+        <p style="margin-top:8px;font-size:12px;color:var(--text-muted)">Make the authorization code get sent to an attacker-controlled endpoint.</p>
+      </div>
+
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: Weak redirect_uri validation</button>
+        <div class="hint-content">The OAuth provider checks if redirect_uri starts with one of the registered URIs. But it doesn't check for path traversal or appended paths. The registered URI is <code>http://localhost:3000/oauth/callback</code>.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: Path manipulation</button>
+        <div class="hint-content">Try appending to the redirect URI: <code>http://localhost:3000/oauth/callback/../../../labs/attacker/steal.html</code>. The browser resolves this to <code>http://localhost:3000/labs/attacker/steal.html</code> but the server-side check passes because it starts with the registered URI prefix.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Full exploitation</button>
+        <div class="hint-content">
+          1. Craft an OAuth URL with manipulated redirect_uri:<br>
+          <code>/oauth/authorize?client_id=vuln-app&response_type=code&redirect_uri=http://localhost:3000/oauth/callback/../../../labs/attacker/steal.html&state=abc</code><br>
+          2. When the victim authorizes, the code gets sent to your steal page<br>
+          3. The steal page reads ?code= from the URL and displays it
+        </div>
+      </div>
+
+      <h3>Vulnerable Code</h3>
+      <div class="source-code">
+<pre><span class="comment">// OAuth provider: redirect_uri check</span>
+<span class="keyword">let</span> redirectValid = client.redirect_uris
+  .<span class="function">some</span>(uri =>
+    redirect_uri.<span class="sink">startsWith</span>(
+      uri.split('?')[0]
+    )
+  );
+
+<span class="comment">// Only checks if URI STARTS with registered</span>
+<span class="comment">// Allows: /callback/../attacker/page</span>
+<span class="comment">// Allows: /callback/../../evil</span>
+</pre>
+      </div>
+    </div>
+
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#128274; OAuth Login Integration</h2>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">This app uses OAuth for authentication. The login flow redirects to the OAuth provider, which sends back an authorization code to the registered callback URL.</p>
+
+          <div style="background:var(--bg-primary);border-radius:8px;padding:16px;margin-bottom:16px">
+            <h4 style="font-size:13px;color:var(--text-muted);margin-bottom:8px">OAuth Configuration:</h4>
+            <div style="font-size:13px;font-family:monospace;color:var(--text-secondary)">
+              <div>Client ID: <span style="color:var(--accent)">vuln-app</span></div>
+              <div>Registered Callback: <span style="color:var(--accent)">http://localhost:3000/oauth/callback</span></div>
+              <div>Response Type: <span style="color:var(--accent)">code</span></div>
+            </div>
+          </div>
+
+          <a href="/oauth/authorize?client_id=vuln-app&response_type=code&redirect_uri=http://localhost:3000/oauth/callback&state=legit123" class="btn btn-primary" style="text-decoration:none;display:inline-block">Login with OAuth (Normal Flow)</a>
+        </div>
+
+        <hr style="border-color:var(--border);margin:24px 0">
+
+        <div class="lab-form" style="border:1px solid var(--danger);background:rgba(239,68,68,0.05)">
+          <h3 style="color:var(--danger);margin-bottom:12px">&#9760; Craft Malicious OAuth URL</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Manipulate the redirect_uri to redirect the auth code to your attacker page.</p>
+
+          <label>redirect_uri (manipulate this!)</label>
+          <input type="text" id="redirectUri" value="http://localhost:3000/oauth/callback/../../../labs/attacker/steal.html" style="font-family:monospace;font-size:12px">
+
+          <label>response_type</label>
+          <select id="responseType">
+            <option value="code">code (auth code in query string)</option>
+            <option value="token">token (access token in fragment)</option>
+          </select>
+
+          <label>state</label>
+          <input type="text" id="stateParam" value="attacker_state_123">
+
+          <div style="margin-top:8px">
+            <button class="btn btn-danger" onclick="craftUrl()">Generate Malicious URL</button>
+          </div>
+
+          <div id="crafted-url" style="margin-top:12px;display:none">
+            <label>Crafted URL (send this to victim):</label>
+            <textarea id="urlOutput" rows="3" readonly style="font-family:monospace;font-size:11px;background:#0d1117"></textarea>
+            <a id="urlLink" href="#" target="_blank" class="btn btn-danger" style="text-decoration:none;display:inline-block;margin-top:8px">Open in New Tab (simulate victim click)</a>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <a href="/labs/attacker/steal.html" target="_blank" class="btn btn-secondary" style="text-decoration:none">Open Token Stealer Page &rarr;</a>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:8px">
+          <p style="font-size:13px;color:var(--text-muted)">
+            <strong>Real-world context:</strong> OAuth redirect_uri validation is one of the most common sources of account takeover bugs. Common bypasses:
+          </p>
+          <ul style="font-size:13px;color:var(--text-muted);margin-top:8px;padding-left:20px">
+            <li>Path traversal: <code>/callback/../attacker</code></li>
+            <li>Subdomain: <code>callback.attacker.com</code> if check is <code>endsWith</code></li>
+            <li>Parameter: <code>/callback?redirect=evil.com</code></li>
+            <li>Fragment: <code>/callback#@evil.com</code></li>
+            <li>Open redirect chaining: <code>/callback?next=//evil.com</code></li>
+            <li>Case variance: <code>/CallBack</code> vs <code>/callback</code></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    // Check if we got a stolen code
+    var params = new URLSearchParams(location.search);
+    if (params.get('stolen_code')) {
+      solveLab('oauth-1');
+    }
+
+    function craftUrl() {
+      var redirectUri = document.getElementById('redirectUri').value;
+      var responseType = document.getElementById('responseType').value;
+      var state = document.getElementById('stateParam').value;
+
+      var url = '/oauth/authorize?client_id=vuln-app' +
+        '&response_type=' + encodeURIComponent(responseType) +
+        '&redirect_uri=' + encodeURIComponent(redirectUri) +
+        '&state=' + encodeURIComponent(state);
+
+      document.getElementById('crafted-url').style.display = 'block';
+      document.getElementById('urlOutput').value = window.location.origin + url;
+      document.getElementById('urlLink').href = url;
+    }
+  </script>
+</body>
+</html>

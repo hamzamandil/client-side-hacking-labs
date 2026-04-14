@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Writeups - ClientSide Academy</title>
+  <link rel="stylesheet" href="/css/writeup.css">
+  <style>
+    .writeups-hero {
+      background: linear-gradient(180deg, #fff 0%, #f5f5f5 100%);
+      padding: 100px 24px 60px; text-align: center;
+    }
+    .writeups-hero h1 {
+      font-size: clamp(32px, 5vw, 48px); font-weight: 900;
+      letter-spacing: -0.03em; margin-bottom: 12px;
+    }
+    .writeups-hero p {
+      font-size: 16px; color: #525252; max-width: 520px;
+      margin: 0 auto; line-height: 1.7;
+    }
+    .writeups-list {
+      max-width: 900px; margin: 0 auto; padding: 40px 24px 80px;
+    }
+    .wu-category {
+      margin-bottom: 48px;
+    }
+    .wu-category h2 {
+      font-size: 13px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #a3a3a3; margin-bottom: 16px;
+      padding-bottom: 8px; border-bottom: 1px solid #e5e5e5;
+    }
+    .wu-item {
+      display: flex; gap: 16px; align-items: flex-start;
+      padding: 20px; border: 1px solid #e5e5e5; border-radius: 12px;
+      background: #fff; margin-bottom: 10px; text-decoration: none;
+      color: inherit; transition: all 0.2s;
+    }
+    .wu-item:hover {
+      border-color: #d4d4d4; box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+      transform: translateY(-1px);
+    }
+    .wu-sev {
+      font-size: 10px; font-weight: 700; padding: 3px 8px;
+      border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;
+      white-space: nowrap; flex-shrink: 0; margin-top: 3px;
+    }
+    .wu-sev.c { background: #fce7f3; color: #e11d48; }
+    .wu-sev.h { background: #fff7ed; color: #ea580c; }
+    .wu-sev.m { background: #fef3c7; color: #d97706; }
+    .wu-item h3 {
+      font-size: 15px; font-weight: 700; margin-bottom: 4px; line-height: 1.3;
+    }
+    .wu-item p {
+      font-size: 13px; color: #525252; line-height: 1.5; margin-bottom: 6px;
+    }
+    .wu-meta {
+      font-size: 12px; color: #a3a3a3;
+    }
+    .wu-meta strong { color: #525252; }
+    .wu-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .wu-tag {
+      font-size: 11px; padding: 2px 8px; border-radius: 4px;
+      background: #f5f5f5; color: #525252; font-weight: 500;
+    }
+    .back-nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,255,255,0.85); backdrop-filter: blur(12px);
+      border-bottom: 1px solid #e5e5e5; padding: 0 24px; height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .back-nav a { color: #525252; font-size: 14px; font-weight: 500; text-decoration: none; }
+    .back-nav a:hover { color: #171717; }
+    .back-nav .to-labs {
+      background: #0a0a0a; color: #fff; padding: 7px 16px;
+      border-radius: 8px; font-weight: 600; font-size: 13px;
+    }
+  </style>
+</head>
+<body class="writeup-page">
+  <nav class="back-nav">
+    <a href="/">&larr; Home</a>
+    <a href="/dashboard" class="to-labs">Open Labs &rarr;</a>
+  </nav>
+
+  <div class="writeups-hero">
+    <h1>Writeups</h1>
+    <p>Deep dives into real client-side vulnerabilities. Each writeup explains the discovery process, the exploitation chain, and links to a hands-on lab.</p>
+  </div>
+
+  <div class="writeups-list">
+
+    <div class="wu-category">
+      <h2>DOM XSS &amp; Supply Chain</h2>
+
+      <a class="wu-item" href="/writeups/dom-xss-createcontextualfragment">
+        <span class="wu-sev c">Critical</span>
+        <div>
+          <h3>DOM XSS via createContextualFragment in Widget SDK</h3>
+          <p>How a single unsafe DOM API in a form widget SDK affected 50+ bug bounty targets. Supply-chain XSS at scale via the form configuration API.</p>
+          <div class="wu-meta">Inspired by <strong>xssdoctor</strong> &middot; Lab: Advanced #2</div>
+          <div class="wu-tags">
+            <span class="wu-tag">createContextualFragment</span>
+            <span class="wu-tag">supply chain</span>
+            <span class="wu-tag">dangerouslySetInnerHTML</span>
+          </div>
+        </div>
+      </a>
+
+      <a class="wu-item" href="/writeups/prototype-pollution-xss-chain">
+        <span class="wu-sev h">High</span>
+        <div>
+          <h3>Prototype Pollution via deparam to XSS</h3>
+          <p>Hash-based prototype pollution in a tracking script bypasses WAFs and chains to XSS via script gadgets on every instrumented site.</p>
+          <div class="wu-meta">Inspired by <strong>matanber</strong> &middot; Lab: Advanced #1</div>
+          <div class="wu-tags">
+            <span class="wu-tag">__proto__</span>
+            <span class="wu-tag">deparam</span>
+            <span class="wu-tag">script gadget</span>
+            <span class="wu-tag">WAF bypass</span>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="wu-category">
+      <h2>PostMessage Exploitation</h2>
+
+      <a class="wu-item" href="/writeups/postmessage-no-origin-check">
+        <span class="wu-sev c">Critical</span>
+        <div>
+          <h3>PostMessage Without Origin Check in Chat Widget</h3>
+          <p>Zero origin validation in an open-source chat SDK enables window.open injection, cookie manipulation, and open redirect on any site using the widget.</p>
+          <div class="wu-meta">Inspired by <strong>renwa</strong> &middot; Labs: PostMessage #1-#4</div>
+          <div class="wu-tags">
+            <span class="wu-tag">postMessage</span>
+            <span class="wu-tag">origin bypass</span>
+            <span class="wu-tag">window.open</span>
+            <span class="wu-tag">cookie poisoning</span>
+          </div>
+        </div>
+      </a>
+
+      <a class="wu-item" href="/writeups/postmessage-pii-exfiltration">
+        <span class="wu-sev h">High</span>
+        <div>
+          <h3>PostMessage PII Leak via Widget Framing</h3>
+          <p>Booking widget broadcasts PII (name, email, phone) to wildcard origin. Frame it, intercept the data, exfiltrate silently. Victim fills out a real form on a real domain.</p>
+          <div class="wu-meta">Inspired by <strong>renwa</strong> &middot; Lab: CORS #3</div>
+          <div class="wu-tags">
+            <span class="wu-tag">postMessage</span>
+            <span class="wu-tag">targetOrigin: *</span>
+            <span class="wu-tag">PII leak</span>
+            <span class="wu-tag">framing</span>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="wu-category">
+      <h2>CORS Exploitation</h2>
+
+      <a class="wu-item" href="/writeups/cors-wildcard-credential-theft">
+        <span class="wu-sev c">Critical</span>
+        <div>
+          <h3>CORS Wildcard + Subdomain Takeover = Full ATO</h3>
+          <p>Chaining *.target.com CORS with a dangling CNAME to steal auth tokens, user data, CSRF tokens. Read + write access to victim's account.</p>
+          <div class="wu-meta">Inspired by <strong>Vitor Falcao</strong> &middot; Lab: CORS #2</div>
+          <div class="wu-tags">
+            <span class="wu-tag">CORS</span>
+            <span class="wu-tag">subdomain takeover</span>
+            <span class="wu-tag">dangling CNAME</span>
+            <span class="wu-tag">ATO chain</span>
+          </div>
+        </div>
+      </a>
+
+      <a class="wu-item" href="/writeups/cors-any-origin-health-data">
+        <span class="wu-sev h">High</span>
+        <div>
+          <h3>CORS Reflects Any Origin: Silent Health Data Theft</h3>
+          <p>API reflects ANY origin with credentials. 200M+ users' health data stealable from any website. No XSS needed, no subdomain compromise.</p>
+          <div class="wu-meta">Inspired by <strong>Vitor Falcao</strong> &middot; Lab: CORS #1</div>
+          <div class="wu-tags">
+            <span class="wu-tag">CORS</span>
+            <span class="wu-tag">any origin</span>
+            <span class="wu-tag">null origin</span>
+            <span class="wu-tag">health data</span>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="wu-category">
+      <h2>OAuth &amp; Authentication</h2>
+
+      <a class="wu-item" href="/writeups/oauth-dirty-dancing">
+        <span class="wu-sev h">High</span>
+        <div>
+          <h3>OAuth Dirty Dancing: Open Redirect to Token Theft</h3>
+          <p>Chaining open redirect with OAuth implicit flow and postMessage gadgets to steal access tokens. Three medium bugs = critical ATO.</p>
+          <div class="wu-meta">Inspired by <strong>xssdoctor</strong> &middot; Labs: OAuth #1-#3</div>
+          <div class="wu-tags">
+            <span class="wu-tag">OAuth</span>
+            <span class="wu-tag">implicit flow</span>
+            <span class="wu-tag">open redirect</span>
+            <span class="wu-tag">response_type juggling</span>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="wu-category">
+      <h2>Client-Side Path Traversal</h2>
+
+      <a class="wu-item" href="/writeups/cspt-to-xss">
+        <span class="wu-sev h">High</span>
+        <div>
+          <h3>Client-Side Path Traversal to Stored XSS</h3>
+          <p>User input in fetch URL path + file upload = attacker controls the API response. Response rendered as HTML = XSS. Chain to CSRF for ATO.</p>
+          <div class="wu-meta">Inspired by <strong>matanber</strong> &middot; Labs: CSPT #1-#4</div>
+          <div class="wu-tags">
+            <span class="wu-tag">CSPT</span>
+            <span class="wu-tag">response injection</span>
+            <span class="wu-tag">CSPT2CSRF</span>
+            <span class="wu-tag">filter bypass</span>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="wu-category">
+      <h2>Bug Chains</h2>
+
+      <a class="wu-item" href="/writeups/mega-chain-ato">
+        <span class="wu-sev c">Critical</span>
+        <div>
+          <h3>The Grand Chain: CSPT + PostMessage + OAuth = ATO</h3>
+          <p>Three individually low-severity client-side bugs chained into a one-click, full account takeover. CSPT injects response, postMessage leaks URL, OAuth steals token.</p>
+          <div class="wu-meta">Inspired by <strong>xssdoctor</strong> &amp; <strong>matanber</strong> &middot; Lab: Chain #4</div>
+          <div class="wu-tags">
+            <span class="wu-tag">mega chain</span>
+            <span class="wu-tag">CSPT</span>
+            <span class="wu-tag">postMessage</span>
+            <span class="wu-tag">OAuth</span>
+            <span class="wu-tag">ATO</span>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="wu-category">
+      <h2>Real-World Writeup Labs</h2>
+
+      <a class="wu-item" href="/writeups/window-open-target-hijack">
+        <span class="wu-sev c">Critical</span>
+        <div>
+          <h3>Window.open Target Hijacking: OAuth Popup Takeover</h3>
+          <p>Predictable window.open target name lets attacker pre-register an iframe, hijacking the OAuth flow to force-link a malicious addon to the victim's workspace.</p>
+          <div class="wu-meta">Based on <strong>CTBB Lab</strong> research &middot; Lab: WorkHub Marketplace</div>
+          <div class="wu-tags">
+            <span class="wu-tag">window.open</span>
+            <span class="wu-tag">OAuth hijack</span>
+            <span class="wu-tag">browsing context</span>
+            <span class="wu-tag">iframe name</span>
+          </div>
+        </div>
+      </a>
+
+      <a class="wu-item" href="/writeups/cspt-delete-requests">
+        <span class="wu-sev c">Critical</span>
+        <div>
+          <h3>CSPT in DELETE Requests: Account Deletion via Path Traversal</h3>
+          <p>Session management page builds DELETE fetch URLs from unsanitized input. Path traversal redirects the request to destructive endpoints &mdash; deleting accounts, initiating transfers.</p>
+          <div class="wu-meta">Based on <strong>Deepstrike</strong> research &middot; Lab: SecureVault</div>
+          <div class="wu-tags">
+            <span class="wu-tag">CSPT</span>
+            <span class="wu-tag">DELETE method</span>
+            <span class="wu-tag">account deletion</span>
+            <span class="wu-tag">path traversal</span>
+          </div>
+        </div>
+      </a>
+
+      <a class="wu-item" href="/writeups/postmessage-iframe-injection">
+        <span class="wu-sev h">High</span>
+        <div>
+          <h3>PostMessage XSS via Iframe Attribute Injection</h3>
+          <p>Floating widget system creates iframes from postMessage data using string concatenation. No origin check, no sanitization. Break out of the src attribute to inject event handlers.</p>
+          <div class="wu-meta">Based on <strong>Youghourta Ghannei</strong>'s writeup &middot; Lab: CloudDocs</div>
+          <div class="wu-tags">
+            <span class="wu-tag">postMessage</span>
+            <span class="wu-tag">attribute breakout</span>
+            <span class="wu-tag">insertAdjacentHTML</span>
+            <span class="wu-tag">iframe injection</span>
+          </div>
+        </div>
+      </a>
+    </div>
+
+  </div>
+</body>
+</html>

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: document.write Injection - DOM XSS Level 2</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">DOM XSS #2: document.write Injection</span>
+      <span class="difficulty easy">Easy</span>
+    </div>
+  </div>
+
+  <div id="solve-banner" class="solve-banner"></div>
+
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Execute <code>alert('XSS')</code> by exploiting the <code>document.write()</code> sink that uses a URL query parameter.</p>
+      </div>
+
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: Source</button>
+        <div class="hint-content">The page reads the <code>?name=</code> query parameter from the URL. Try adding <code>?name=test</code> to see it reflected.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: The sink context</button>
+        <div class="hint-content">The parameter is placed inside an HTML attribute in a <code>document.write()</code> call: <code>&lt;img src="..." alt="VALUE"&gt;</code>. You need to break out of the attribute.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Payload</button>
+        <div class="hint-content">Try: <code>?name=" onload="alert('XSS')" x="</code> or <code>?name=">&lt;img src=x onerror=alert('XSS')&gt;</code> — break out of the alt attribute and inject your own event handler or tag.</div>
+      </div>
+
+      <h3>Vulnerable Code</h3>
+      <div class="source-code">
+<pre><span class="comment">// Source: URL query parameter</span>
+<span class="keyword">var</span> params = <span class="keyword">new</span> <span class="function">URLSearchParams</span>(
+  window.location.search
+);
+<span class="keyword">var</span> name = params.<span class="function">get</span>('name') || 'Guest';
+
+<span class="comment">// Sink: document.write (dangerous!)</span>
+document.<span class="sink">write</span>(
+  '&lt;div class="welcome-card"&gt;' +
+  '&lt;img src="/img/avatar.png" alt="' + name + '"&gt;' +
+  '&lt;h2&gt;Welcome, ' + name + '!&lt;/h2&gt;' +
+  '&lt;/div&gt;'
+);
+</pre>
+      </div>
+    </div>
+
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#128100; User Welcome Page</h2>
+          <label>Enter your name (or use ?name= in the URL)</label>
+          <input type="text" id="nameInput" placeholder="Your name...">
+          <button class="btn btn-primary" onclick="location.search='?name='+encodeURIComponent(document.getElementById('nameInput').value)">Go</button>
+        </div>
+
+        <div id="welcome-area" style="margin-top:20px">
+          <!-- document.write renders here -->
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:8px">
+          <p style="font-size:13px;color:var(--text-muted)">
+            <strong>Real-world context:</strong> document.write() is a legacy API still found in many older apps and third-party widgets. It writes directly to the document during parsing, making it a powerful XSS sink. The key insight is that you need to break out of the HTML context (attribute, tag) the input is placed into.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('dom-xss-2', 'xss');
+  </script>
+  <script>
+    // === VULNERABLE CODE ===
+    var params = new URLSearchParams(window.location.search);
+    var name = params.get('name') || 'Guest';
+
+    // VULNERABLE: document.write with user input in HTML attribute context
+    var welcomeHtml = '<div style="background:var(--bg-card);border-radius:12px;padding:24px;text-align:center">' +
+      '<img src="/img/avatar.png" alt="' + name + '" style="width:80px;height:80px;border-radius:50%;background:var(--border)">' +
+      '<h2 style="color:var(--text-primary);margin-top:12px">Welcome, ' + name + '!</h2>' +
+      '<p style="color:var(--text-muted)">You are now logged in to the platform.</p>' +
+      '</div>';
+
+    document.getElementById('welcome-area').innerHTML = welcomeHtml;
+  </script>
+</body>
+</html>

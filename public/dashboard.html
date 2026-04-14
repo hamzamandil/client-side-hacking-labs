@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - ClientSide Academy</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1f3af;</text></svg>">
+</head>
+<body>
+
+  <div class="header">
+    <div style="display:flex;align-items:center;gap:16px;">
+      <a href="/" style="color:var(--text-muted);font-size:14px;font-weight:500;">&larr; Home</a>
+      <h1><span class="icon">&#127919;</span> ClientSide Academy</h1>
+    </div>
+    <div class="header-stats">
+      <div class="stat">
+        <div class="stat-value" id="stat-solved">0</div>
+        <div class="stat-label">Solved</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="stat-total">36</div>
+        <div class="stat-label">Total</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="stat-pct">0%</div>
+        <div class="stat-label">Complete</div>
+      </div>
+      <button class="btn btn-secondary" onclick="resetProgress()" style="font-size:12px">Reset</button>
+    </div>
+  </div>
+
+  <div class="progress-bar-container">
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+    </div>
+    <div class="progress-text" id="progress-text">0 / 36 labs completed</div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-category="all" onclick="setActiveTab('all')">All <span class="count">40</span></div>
+    <div class="tab" data-category="dom-xss" onclick="setActiveTab('dom-xss')">DOM XSS <span class="count">5</span></div>
+    <div class="tab" data-category="postmessage" onclick="setActiveTab('postmessage')">PostMessage <span class="count">4</span></div>
+    <div class="tab" data-category="cspt" onclick="setActiveTab('cspt')">CSPT <span class="count">4</span></div>
+    <div class="tab" data-category="oauth" onclick="setActiveTab('oauth')">OAuth <span class="count">3</span></div>
+    <div class="tab" data-category="advanced" onclick="setActiveTab('advanced')">Advanced <span class="count">4</span></div>
+    <div class="tab" data-category="cors" onclick="setActiveTab('cors')">CORS <span class="count">3</span></div>
+    <div class="tab" data-category="chains" onclick="setActiveTab('chains')">Chains <span class="count">7</span></div>
+    <div class="tab" data-category="capstone" onclick="setActiveTab('capstone')">Capstone <span class="count">6</span></div>
+    <div class="tab" data-category="realworld" onclick="setActiveTab('realworld')">Real-World <span class="count">4</span></div>
+  </div>
+
+  <div class="main" id="main-content">
+    <!-- Rendered by JS -->
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    // Handle hash-based category navigation from landing page
+    function handleHashNavigation() {
+      var hash = location.hash.replace('#', '');
+      if (hash && document.querySelector('.tab[data-category="' + hash + '"]')) {
+        setActiveTab(hash);
+      }
+    }
+    window.addEventListener('hashchange', handleHashNavigation);
+    document.addEventListener('DOMContentLoaded', handleHashNavigation);
+  </script>
+</body>
+</html>

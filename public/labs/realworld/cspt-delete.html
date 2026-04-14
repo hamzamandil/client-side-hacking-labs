@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SecureVault - Security Settings</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', -apple-system, sans-serif; background: #f8fafc; color: #0f172a; }
+    .nav { background: #fff; border-bottom: 1px solid #e2e8f0; height: 56px; display: flex; align-items: center; padding: 0 24px; justify-content: space-between; }
+    .nav .logo { font-weight: 800; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+    .nav .logo .shield { color: #2563eb; }
+    .nav .nav-links { display: flex; gap: 24px; font-size: 14px; }
+    .nav .nav-links a { color: #64748b; text-decoration: none; font-weight: 500; }
+    .nav .nav-links a:hover { color: #0f172a; }
+    .nav .nav-links a.active { color: #2563eb; }
+    .nav .user-pill { display: flex; align-items: center; gap: 8px; background: #f1f5f9; padding: 6px 14px 6px 8px; border-radius: 20px; font-size: 13px; font-weight: 500; }
+    .nav .user-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
+    .container { max-width: 860px; margin: 0 auto; padding: 40px 24px; }
+    .breadcrumb { font-size: 13px; color: #94a3b8; margin-bottom: 24px; }
+    .breadcrumb a { color: #64748b; text-decoration: none; }
+    .breadcrumb span { margin: 0 6px; }
+    h1 { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+    .subtitle { font-size: 14px; color: #64748b; margin-bottom: 32px; }
+    .section { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
+    .section-header { padding: 18px 24px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+    .section-header h2 { font-size: 16px; font-weight: 600; }
+    .section-header .count { font-size: 12px; color: #94a3b8; background: #f1f5f9; padding: 2px 10px; border-radius: 10px; font-weight: 600; }
+    .session-row { display: flex; align-items: center; padding: 16px 24px; border-bottom: 1px solid #f8fafc; gap: 16px; }
+    .session-row:last-child { border-bottom: none; }
+    .session-row:hover { background: #fafbfc; }
+    .session-icon { width: 40px; height: 40px; border-radius: 10px; background: #f1f5f9; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    .session-info { flex: 1; }
+    .session-device { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+    .session-meta { font-size: 12px; color: #94a3b8; display: flex; gap: 16px; }
+    .session-badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+    .badge-current { background: #dcfce7; color: #16a34a; }
+    .btn { padding: 7px 14px; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+    .btn-danger-outline { background: transparent; color: #dc2626; border: 1px solid #fecaca; }
+    .btn-danger-outline:hover { background: #fef2f2; border-color: #dc2626; }
+    .btn-danger { background: #dc2626; color: white; }
+    .btn-danger:hover { background: #b91c1c; }
+    .danger-zone { border-color: #fecaca; }
+    .danger-zone .section-header { background: #fef2f2; border-bottom-color: #fecaca; }
+    .danger-zone .section-header h2 { color: #dc2626; }
+    .danger-body { padding: 20px 24px; }
+    .danger-body p { font-size: 13px; color: #64748b; margin-bottom: 16px; line-height: 1.6; }
+    .toast { position: fixed; bottom: 24px; right: 24px; padding: 14px 20px; border-radius: 10px; font-size: 13px; font-weight: 500; display: none; box-shadow: 0 8px 24px rgba(0,0,0,0.15); z-index: 1000; max-width: 420px; }
+    .toast.show { display: block; animation: slideUp 0.3s ease; }
+    .toast.success { background: #166534; color: white; }
+    .toast.error { background: #991b1b; color: white; }
+    .toast.warning { background: #92400e; color: white; }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    #login-overlay { position: fixed; inset: 0; background: #0f172a; display: flex; align-items: center; justify-content: center; z-index: 9999; }
+    .login-card { background: #1e293b; padding: 36px; border-radius: 16px; width: 340px; color: #e2e8f0; }
+    .login-card h2 { font-size: 20px; margin-bottom: 4px; }
+    .login-card .tagline { font-size: 13px; color: #94a3b8; margin-bottom: 24px; }
+    .login-card input { width: 100%; padding: 10px 14px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; font-size: 14px; margin-bottom: 10px; }
+    .login-card button { width: 100%; padding: 10px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; margin-top: 4px; }
+    .hidden { display: none !important; }
+    .confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 999; }
+    .confirm-overlay.show { display: flex; }
+    .confirm-box { background: white; border-radius: 14px; padding: 28px; max-width: 400px; width: 90%; }
+    .confirm-box h3 { font-size: 16px; margin-bottom: 8px; }
+    .confirm-box p { font-size: 13px; color: #64748b; margin-bottom: 20px; line-height: 1.5; }
+    .confirm-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .confirm-actions .btn { padding: 8px 18px; }
+  </style>
+</head>
+<body>
+
+  <div id="login-overlay">
+    <div class="login-card">
+      <h2>🛡️ SecureVault</h2>
+      <div class="tagline">Enterprise Security Platform</div>
+      <input type="text" id="l-user" placeholder="Username" value="victim">
+      <input type="password" id="l-pass" placeholder="Password" value="password123">
+      <button onclick="login()">Sign In</button>
+      <p style="font-size:11px;color:#475569;margin-top:10px;text-align:center">Demo: victim / password123</p>
+    </div>
+  </div>
+
+  <nav class="nav">
+    <div class="logo"><span class="shield">🛡️</span> SecureVault</div>
+    <div class="nav-links">
+      <a href="#">Dashboard</a>
+      <a href="#">Audit Log</a>
+      <a href="#" class="active">Security</a>
+      <a href="#">Team</a>
+    </div>
+    <div class="user-pill"><div class="dot"></div> <span id="nav-user">Loading</span></div>
+  </nav>
+
+  <div class="container">
+    <div class="breadcrumb">
+      <a href="#">Settings</a> <span>›</span> <a href="#">Security</a> <span>›</span> Active Sessions
+    </div>
+
+    <h1>Active Sessions</h1>
+    <p class="subtitle">Manage your active sessions across devices. Revoke any session you don't recognize.</p>
+
+    <div class="section">
+      <div class="section-header">
+        <h2>Your Sessions</h2>
+        <span class="count" id="session-count">Loading</span>
+      </div>
+      <div id="sessions-list">
+        <div style="padding:24px;color:#94a3b8;font-size:14px">Loading sessions...</div>
+      </div>
+    </div>
+
+    <div class="section danger-zone">
+      <div class="section-header">
+        <h2>Danger Zone</h2>
+      </div>
+      <div class="danger-body">
+        <p>Revoking a session will immediately log out that device. The current session cannot be revoked from this page.</p>
+        <button class="btn btn-danger" onclick="revokeAll()">Revoke All Other Sessions</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="confirm-overlay" id="confirm-dialog">
+    <div class="confirm-box">
+      <h3 id="confirm-title">Revoke Session?</h3>
+      <p id="confirm-text">This will immediately log out the device. This action cannot be undone.</p>
+      <div class="confirm-actions">
+        <button class="btn" style="background:#f1f5f9;color:#475569" onclick="cancelRevoke()">Cancel</button>
+        <button class="btn btn-danger" id="confirm-btn" onclick="executeRevoke()">Revoke</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('rw-cspt-delete', 'xss');
+
+    var pendingSessionId = null;
+
+    function login() {
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        credentials: 'include',
+        body: JSON.stringify({
+          username: document.getElementById('l-user').value,
+          password: document.getElementById('l-pass').value
+        })
+      }).then(function(r){ return r.json(); }).then(function(d){
+        if (d.success) {
+          document.getElementById('login-overlay').classList.add('hidden');
+          document.getElementById('nav-user').textContent = d.user.username;
+          loadSessions();
+        }
+      });
+    }
+
+    function loadSessions() {
+      fetch('/api/sessions', { credentials: 'include' })
+        .then(function(r){ return r.json(); })
+        .then(function(data) {
+          var list = document.getElementById('sessions-list');
+          var count = document.getElementById('session-count');
+          count.textContent = data.sessions.length + ' active';
+          list.innerHTML = '';
+          data.sessions.forEach(function(sess) {
+            var icons = { 'Chrome': '🖥️', 'Firefox': '🦊', 'Safari': '📱' };
+            var icon = '💻';
+            for (var k in icons) { if (sess.device.includes(k)) icon = icons[k]; }
+
+            var row = document.createElement('div');
+            row.className = 'session-row';
+            row.innerHTML =
+              '<div class="session-icon">' + icon + '</div>' +
+              '<div class="session-info">' +
+                '<div class="session-device">' + sess.device +
+                  (sess.current ? ' <span class="session-badge badge-current">Current</span>' : '') +
+                '</div>' +
+                '<div class="session-meta">' +
+                  '<span>IP: ' + sess.ip + '</span>' +
+                  '<span>Last active: ' + sess.lastActive + '</span>' +
+                '</div>' +
+              '</div>' +
+              (sess.current ? '' :
+                '<button class="btn btn-danger-outline" onclick="promptRevoke(\'' + sess.id + '\', \'' + sess.device + '\')">Revoke</button>');
+            list.appendChild(row);
+          });
+        });
+    }
+
+    function promptRevoke(sessionId, device) {
+      // The sessionId comes from the server response - but what if it came from a URL param?
+      // Check the URL for a session parameter override
+      var urlParams = new URLSearchParams(window.location.search);
+      var overrideSession = urlParams.get('session');
+      if (overrideSession) {
+        sessionId = overrideSession;
+      }
+
+      pendingSessionId = sessionId;
+      document.getElementById('confirm-title').textContent = 'Revoke Session?';
+      document.getElementById('confirm-text').textContent = 'This will log out "' + device + '" immediately. Continue?';
+      document.getElementById('confirm-dialog').classList.add('show');
+    }
+
+    function cancelRevoke() {
+      document.getElementById('confirm-dialog').classList.remove('show');
+      pendingSessionId = null;
+    }
+
+    function executeRevoke() {
+      document.getElementById('confirm-dialog').classList.remove('show');
+      if (!pendingSessionId) return;
+
+      // VULNERABLE: sessionId is used directly in the DELETE URL path
+      // If sessionId contains "../", it traverses the path
+      // e.g., sessionId = "../profile" -> DELETE /api/sessions/../profile -> DELETE /api/profile
+      fetch('/api/sessions/' + pendingSessionId, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      .then(function(r){ return r.json(); })
+      .then(function(data) {
+        if (data.flag) {
+          showToast('error', 'EXPLOITED: ' + data.message);
+          solveLab('rw-cspt-delete');
+        } else if (data.success) {
+          showToast('success', data.message);
+          loadSessions();
+        } else {
+          showToast('error', data.error || 'Failed');
+        }
+      });
+
+      pendingSessionId = null;
+    }
+
+    function revokeAll() {
+      showToast('warning', 'This would revoke all other sessions.');
+    }
+
+    function showToast(type, msg) {
+      var t = document.getElementById('toast');
+      t.className = 'toast show ' + type;
+      t.textContent = msg;
+      setTimeout(function(){ t.className = 'toast'; }, 6000);
+    }
+
+    // Auto-login check
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.user) {
+          document.getElementById('login-overlay').classList.add('hidden');
+          document.getElementById('nav-user').textContent = d.user.username;
+          loadSessions();
+        }
+      }).catch(function(){});
+  </script>
+</body>
+</html>

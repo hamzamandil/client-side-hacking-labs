@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: No Origin Check - PostMessage Level 1</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">PostMessage #1: No Origin Check</span>
+      <span class="difficulty easy">Easy</span>
+    </div>
+  </div>
+
+  <div id="solve-banner" class="solve-banner"></div>
+
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Execute <code>alert('XSS')</code> by sending a malicious postMessage to this page from the attacker page. The widget accepts messages without checking the origin.</p>
+      </div>
+
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: How postMessage works</button>
+        <div class="hint-content">A page can send messages to another window using <code>targetWindow.postMessage(data, '*')</code>. The receiving page listens with <code>window.addEventListener('message', handler)</code>. If the handler doesn't check <code>event.origin</code>, ANY page can send it messages.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: The attack setup</button>
+        <div class="hint-content">Open this lab page, then open the attacker page in another tab. The attacker page uses <code>window.open()</code> to get a reference to this page, then sends it a postMessage with HTML that gets rendered via innerHTML.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Using the attacker page</button>
+        <div class="hint-content">Click "Open Attacker Page" below. It will open in a new tab. From there you can send postMessages to this page. The message is expected to be JSON with a <code>type</code> and <code>content</code> field. The content is rendered via innerHTML. Send: <code>{"type":"update","content":"&lt;img src=x onerror=alert('XSS')&gt;"}</code></div>
+      </div>
+
+      <h3>Vulnerable Code</h3>
+      <div class="source-code">
+<pre><span class="comment">// Listens for widget update messages</span>
+window.<span class="function">addEventListener</span>('message',
+  <span class="keyword">function</span>(event) {
+    <span class="comment">// BUG: No origin check!</span>
+    <span class="comment">// Should be: if(event.origin !== expected) return;</span>
+
+    <span class="keyword">var</span> data = JSON.<span class="function">parse</span>(event.data);
+    <span class="keyword">if</span> (data.type === 'update') {
+      document.<span class="function">getElementById</span>('widget')
+        .<span class="sink">innerHTML</span> = data.content;
+    }
+  }
+);
+</pre>
+      </div>
+    </div>
+
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <h2>&#128172; Live Notification Widget</h2>
+          <a href="/labs/attacker/postmessage-attacker.html" target="_blank" class="btn btn-danger" style="text-decoration:none">Open Attacker Page &rarr;</a>
+        </div>
+
+        <div class="lab-form">
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">This widget receives real-time updates via postMessage from trusted sources. It displays notifications, alerts, and status updates.</p>
+
+          <div id="widget" class="vuln-output" style="min-height:80px">
+            <p style="color:var(--text-muted)">&#128276; Waiting for notifications...</p>
+            <p style="color:var(--text-muted);font-size:12px">Widget is listening for postMessage events</p>
+          </div>
+        </div>
+
+        <div id="message-log" style="margin-top:16px">
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">Message Log:</h3>
+          <div class="attacker-console">
+            <div class="title">Incoming Messages</div>
+            <div id="log-content">
+              <div class="log" style="color:var(--text-muted)">No messages received yet...</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:8px">
+          <p style="font-size:13px;color:var(--text-muted)">
+            <strong>Real-world context:</strong> Many websites use postMessage for cross-origin communication — chat widgets, analytics, payment iframes, SSO flows. If the message handler doesn't validate <code>event.origin</code>, any page that can get a reference to the window (via window.open, iframe, or window.opener) can send malicious messages.
+          </p>
+          <p style="font-size:13px;color:var(--text-muted);margin-top:8px">
+            <strong>Bug bounty tip:</strong> Search for <code>addEventListener('message'</code> or <code>onmessage</code> and check if the handler validates the origin. Then look at what it does with the data — innerHTML, eval, location changes, etc.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('postmsg-1', 'xss');
+
+    // === VULNERABLE CODE ===
+    window.addEventListener('message', function(event) {
+      // BUG: No origin check! Any page can send messages here.
+
+      var logContent = document.getElementById('log-content');
+      logContent.innerHTML += '<div class="log">Message from: ' + event.origin + '</div>';
+
+      try {
+        var data;
+        if (typeof event.data === 'string') {
+          data = JSON.parse(event.data);
+        } else {
+          data = event.data;
+        }
+
+        logContent.innerHTML += '<div class="log">Type: ' + data.type + ', Content length: ' + (data.content || '').length + '</div>';
+
+        if (data.type === 'update') {
+          // VULNERABLE SINK: innerHTML with unvalidated postMessage data
+          document.getElementById('widget').innerHTML = data.content;
+        } else if (data.type === 'append') {
+          document.getElementById('widget').innerHTML += data.content;
+        } else if (data.type === 'config') {
+          // Also processes config updates
+          if (data.title) {
+            document.querySelector('h2').innerHTML = data.title;
+          }
+        }
+      } catch(e) {
+        logContent.innerHTML += '<div class="log" style="color:var(--danger)">Error parsing message: ' + e.message + '</div>';
+      }
+    });
+  </script>
+</body>
+</html>

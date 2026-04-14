@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSPT in DELETE Requests: Account Deletion via Path Traversal - ClientSide Academy</title>
+  <link rel="stylesheet" href="/css/writeup.css">
+</head>
+<body class="writeup-page">
+  <nav class="writeup-nav">
+    <a href="/writeups">&larr; All Writeups</a>
+    <div class="nav-right">
+      <a href="/labs/realworld/cspt-delete.html" class="try-lab">Try the Lab &rarr;</a>
+    </div>
+  </nav>
+
+  <div class="writeup-container">
+    <div class="writeup-meta">
+      <span class="writeup-sev critical">Critical</span>
+      <span class="writeup-category">CSPT &middot; DELETE &middot; Account Deletion &middot; Path Traversal</span>
+    </div>
+
+    <h1>Client-Side Path Traversal in DELETE Requests: Deleting Arbitrary Accounts</h1>
+    <div class="writeup-author">Based on <strong>Deepstrike</strong> research &middot; Unsanitized input in destructive API calls</div>
+
+    <div class="callout callout-vuln">
+      <h4>Vulnerability</h4>
+      <p>A session management page constructs a <code>DELETE</code> fetch request using a <code>sessionId</code> parameter taken directly from user input. No sanitization is applied before the value is interpolated into the URL path. By injecting path traversal sequences (<code>../</code>), an attacker can redirect the DELETE request to any API endpoint &mdash; including account deletion, fund transfers, or admin operations.</p>
+    </div>
+
+    <h2>The Vulnerable Pattern</h2>
+    <p>The application's session revocation feature builds the API URL using string concatenation:</p>
+
+    <pre><code>// Session management page JavaScript
+if (userConfirmed) {
+  fetch(`/api/users/sessions/${sessionId}`, {
+    method: "DELETE",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  })
+  .then(async (res) => {
+    if (res.ok) {
+      alert("Session deleted successfully!");
+    }
+  })
+}</code></pre>
+
+    <p>The critical flaw: <code>sessionId</code> is interpolated directly into the request path without any filtering or validation. If <code>sessionId</code> comes from a URL parameter, the attacker controls the path.</p>
+
+    <h2>The Attack</h2>
+
+    <h3>Normal Request</h3>
+    <pre><code>// User clicks "Revoke" on session sess_a1b2c3
+DELETE /api/users/sessions/sess_a1b2c3 HTTP/1.1
+// Result: Session revoked ✓</code></pre>
+
+    <h3>Malicious Request</h3>
+    <pre><code>// Attacker crafts URL: ?session=../profile
+// sessionId = "../profile"
+DELETE /api/users/sessions/../profile HTTP/1.1
+
+// Server resolves path to:
+DELETE /api/users/profile HTTP/1.1
+// Result: USER ACCOUNT DELETED!</code></pre>
+
+    <h3>Escalation: Reaching Other Endpoints</h3>
+    <pre><code>// Delete another user's data:
+?session=../../other-user/sessions/all
+// DELETE /api/users/sessions/../../other-user/sessions/all
+// → DELETE /api/other-user/sessions/all
+
+// Hit the transfer endpoint:
+?session=../../transfer?to=attacker&amount=10000
+// DELETE /api/users/sessions/../../transfer?to=attacker&amount=10000
+
+// Admin operations:
+?session=../../../admin/users/victim
+// DELETE /api/users/sessions/../../../admin/users/victim
+// → DELETE /admin/users/victim</code></pre>
+
+    <div class="callout callout-impact">
+      <h4>Why DELETE is Especially Dangerous</h4>
+      <p>Most CSPT research focuses on GET and POST requests. But DELETE-based CSPT is often <strong>more impactful</strong> because:</p>
+      <p>&bull; DELETE operations are inherently destructive and often irreversible</p>
+      <p>&bull; Developers assume DELETE endpoints are "safe" because they require authentication</p>
+      <p>&bull; Many APIs have DELETE endpoints for accounts, data, subscriptions, and resources</p>
+      <p>&bull; A single malicious link can permanently destroy a user's account or data</p>
+    </div>
+
+    <h2>Why Server-Side Validation Isn't Enough</h2>
+    <p>The developer might argue "our server validates the session ID." But the path traversal happens <strong>before</strong> the server sees the session ID:</p>
+
+    <pre><code>// What the developer expects:
+// Client sends: DELETE /api/users/sessions/[valid-session-id]
+// Server checks: does this session belong to the authenticated user?
+
+// What actually happens with CSPT:
+// Client sends: DELETE /api/users/profile
+// Server receives a DELETE request to /api/users/profile
+// Server never sees a session ID - it's a completely different endpoint!
+// The session validation code never runs.</code></pre>
+
+    <h2>The Social Engineering Vector</h2>
+    <p>The attacker doesn't need to trick the user into pasting a payload. They craft a link that looks legitimate:</p>
+
+    <pre><code>// Attacker sends to victim (looks like a security alert):
+https://app.target.com/security/sessions?session=../profile
+
+// Or via an email:
+"We detected suspicious activity on your account.
+ Please review and revoke the following session:
+ https://app.target.com/security/sessions?session=../profile"
+
+// Victim clicks "Revoke" on the page → their account is deleted</code></pre>
+
+    <div class="attack-flow">
+      <h4>Attack Flow</h4>
+      <div class="flow-step"><div class="flow-num">1</div><p>Attacker crafts malicious URL: <code>/sessions?session=../profile</code></p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">2</div><p>Sends link to victim via email/chat disguised as a security alert</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">3</div><p>Victim opens the page &mdash; sees their sessions listed normally</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">4</div><p>Victim clicks "Revoke" on any session &mdash; the <code>?session</code> URL param overrides the session ID</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">5</div><p>JavaScript sends <code>DELETE /api/users/sessions/../profile</code> instead of the real session ID</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">6</div><p>Server resolves path and executes <code>DELETE /api/users/profile</code> &mdash; account permanently deleted</p></div>
+    </div>
+
+    <div class="callout callout-tip">
+      <h4>Bug Bounty Tip</h4>
+      <p>When hunting for CSPT, don't just look at GET and POST &mdash; specifically target <strong>DELETE, PUT, and PATCH</strong> requests. Search the JavaScript for:</p>
+      <p>&bull; <code>fetch(</code> or <code>XMLHttpRequest</code> with <code>method: "DELETE"</code></p>
+      <p>&bull; Template literals or string concatenation building the URL</p>
+      <p>&bull; URL parameters, hash values, or postMessage data flowing into the path</p>
+      <p>Then test with <code>../</code> to see if you can reach other endpoints. The most impactful CSPT targets destructive operations &mdash; DELETE account, revoke access, cancel subscription.</p>
+    </div>
+
+    <h2>Remediation</h2>
+    <ul>
+      <li><strong>Client-side:</strong> Validate that path parameters contain only expected characters (alphanumeric, hyphens). Reject any value containing <code>.</code>, <code>/</code>, or <code>\</code></li>
+      <li><strong>Client-side:</strong> Never use URL parameters to override server-provided data. The session IDs should only come from the API response, not the URL</li>
+      <li><strong>Server-side:</strong> Normalize request paths before routing &mdash; resolve <code>../</code> sequences and reject requests that traverse outside expected paths</li>
+      <li><strong>Server-side:</strong> Verify that the resource being deleted belongs to the authenticated user at the endpoint level, not just at the router level</li>
+      <li><strong>Architectural:</strong> Use request body parameters (not URL paths) for resource identifiers in destructive operations</li>
+    </ul>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Practice This Vulnerability</h4>
+        <p>Lab: SecureVault Session Manager &mdash; a realistic security settings page. Find the CSPT in the session revocation flow, traverse to the profile deletion endpoint.</p>
+      </div>
+      <a href="/labs/realworld/cspt-delete.html" class="lab-link-btn">Open Lab &rarr;</a>
+    </div>
+
+    <div class="writeup-footer">
+      <a href="/writeups/window-open-target-hijack">&larr; Window.open Target Hijack</a>
+      <a href="/writeups/postmessage-iframe-injection">PostMessage Iframe Injection &rarr;</a>
+    </div>
+  </div>
+</body>
+</html>

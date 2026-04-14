@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: indexOf Origin Bypass - PostMessage Level 2</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">PostMessage #2: indexOf Origin Bypass</span>
+      <span class="difficulty medium">Medium</span>
+    </div>
+  </div>
+
+  <div id="solve-banner" class="solve-banner"></div>
+
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Execute <code>alert('XSS')</code> by bypassing the origin check that uses <code>indexOf()</code>. The handler checks if the origin contains "localhost" but the check is weak.</p>
+      </div>
+
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: Why indexOf is weak</button>
+        <div class="hint-content"><code>origin.indexOf('localhost')</code> returns true for ANY origin containing "localhost" — like <code>http://localhost.evil.com</code> or <code>http://evil.com?localhost</code>. The check doesn't verify the origin is EXACTLY from localhost.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: How to bypass from localhost</button>
+        <div class="hint-content">Since we're testing locally, the origin IS localhost — but the real lesson is understanding why indexOf is flawed. For this lab, you can exploit it directly from the attacker page since both run on localhost. In a real attack, you'd register a domain like <code>localhost.attacker.com</code>.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: The second vulnerability</button>
+        <div class="hint-content">After bypassing the origin check, notice the handler uses <code>eval(data.callback)</code> to call a function by name. If you control the callback parameter, you can inject arbitrary JavaScript. Send: <code>{"action":"render","callback":"alert('XSS')"}</code></div>
+      </div>
+
+      <h3>Vulnerable Code</h3>
+      <div class="source-code">
+<pre>window.<span class="function">addEventListener</span>('message',
+  <span class="keyword">function</span>(e) {
+    <span class="comment">// Weak origin check with indexOf</span>
+    <span class="keyword">if</span> (e.origin.<span class="sink">indexOf</span>('localhost') === -1) {
+      <span class="keyword">return</span>; <span class="comment">// "blocked"</span>
+    }
+
+    <span class="keyword">var</span> data = JSON.<span class="function">parse</span>(e.data);
+    <span class="keyword">if</span> (data.action === 'render') {
+      <span class="comment">// Calls a "callback" function</span>
+      <span class="sink">eval</span>(data.callback + '()');
+    }
+  }
+);
+</pre>
+      </div>
+    </div>
+
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <h2>&#128202; Dashboard Analytics Widget</h2>
+          <a href="/labs/attacker/postmessage-attacker.html" target="_blank" class="btn btn-danger" style="text-decoration:none">Open Attacker Page &rarr;</a>
+        </div>
+
+        <div class="lab-form">
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">This analytics dashboard receives data updates from trusted localhost services. Origin is validated using indexOf check.</p>
+
+          <div id="analytics-widget" class="vuln-output" style="min-height:100px">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center">
+              <div>
+                <div style="font-size:24px;color:var(--accent)" id="metric-users">1,234</div>
+                <div style="font-size:11px;color:var(--text-muted)">Active Users</div>
+              </div>
+              <div>
+                <div style="font-size:24px;color:var(--success)" id="metric-revenue">$5,678</div>
+                <div style="font-size:11px;color:var(--text-muted)">Revenue</div>
+              </div>
+              <div>
+                <div style="font-size:24px;color:var(--warning)" id="metric-orders">89</div>
+                <div style="font-size:11px;color:var(--text-muted)">Orders</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">Security Log:</h3>
+          <div class="attacker-console">
+            <div class="title">Origin Validation Log</div>
+            <div id="security-log">
+              <div class="log" style="color:var(--text-muted)">Listening for messages...</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:8px">
+          <p style="font-size:13px;color:var(--text-muted)">
+            <strong>Real-world context:</strong> Developers often try to validate origins with <code>indexOf()</code>, <code>includes()</code>, <code>endsWith()</code>, or regex that doesn't anchor properly. Common bypasses:
+          </p>
+          <ul style="font-size:13px;color:var(--text-muted);margin-top:8px;padding-left:20px">
+            <li><code>indexOf('example.com')</code> → bypass with <code>example.com.evil.com</code></li>
+            <li><code>endsWith('.example.com')</code> → bypass with <code>notexample.com</code></li>
+            <li><code>/example\.com/</code> → bypass with <code>example.com.evil.com</code></li>
+            <li>Only <code>event.origin === 'https://example.com'</code> is truly safe</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('postmsg-2', 'xss');
+
+    var secLog = document.getElementById('security-log');
+
+    function renderChart() {
+      document.getElementById('metric-users').textContent = Math.floor(Math.random() * 5000).toLocaleString();
+    }
+
+    function updateDashboard() {
+      document.getElementById('metric-revenue').textContent = '$' + Math.floor(Math.random() * 10000).toLocaleString();
+    }
+
+    // === VULNERABLE CODE ===
+    window.addEventListener('message', function(e) {
+      // VULNERABLE: Weak origin check using indexOf
+      if (e.origin.indexOf('localhost') === -1 && e.origin.indexOf('127.0.0.1') === -1) {
+        secLog.innerHTML += '<div class="log" style="color:var(--danger)">BLOCKED: Origin ' + e.origin + ' rejected (no localhost)</div>';
+        return;
+      }
+
+      secLog.innerHTML += '<div class="log" style="color:var(--success)">ALLOWED: Origin ' + e.origin + ' passed indexOf check</div>';
+
+      try {
+        var data;
+        if (typeof e.data === 'string') {
+          data = JSON.parse(e.data);
+        } else {
+          data = e.data;
+        }
+
+        if (data.action === 'render') {
+          // VULNERABLE: eval with user-controlled callback name
+          secLog.innerHTML += '<div class="log">Executing callback: ' + data.callback + '</div>';
+          eval(data.callback);
+        } else if (data.action === 'update') {
+          // Update specific metric
+          var el = document.getElementById('metric-' + data.metric);
+          if (el) el.innerHTML = data.value;
+        } else if (data.action === 'html') {
+          document.getElementById('analytics-widget').innerHTML = data.content;
+        }
+      } catch(err) {
+        secLog.innerHTML += '<div class="log" style="color:var(--danger)">Error: ' + err.message + '</div>';
+      }
+    });
+  </script>
+</body>
+</html>

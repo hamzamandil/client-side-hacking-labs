@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: Basic Path Injection - CSPT Level 1</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">CSPT #1: Basic Path Injection</span>
+      <span class="difficulty easy">Easy</span>
+    </div>
+  </div>
+
+  <div id="solve-banner" class="solve-banner"></div>
+
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>The notifications page fetches <code>/api/notifications/{userId}</code> where userId comes from the URL. Use path traversal to make it fetch a different API endpoint and display sensitive data.</p>
+        <p style="margin-top:8px;font-size:12px;color:var(--text-muted)">Goal: Make the page fetch <code>/api/user/profile/admin</code> instead of notifications, revealing the admin's email.</p>
+      </div>
+
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: How the fetch works</button>
+        <div class="hint-content">The page reads <code>?userId=</code> from the URL and fetches <code>/api/notifications/ + userId</code>. If userId is <code>123</code>, it fetches <code>/api/notifications/123</code>. What if userId contains <code>../</code>?</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: Path traversal</button>
+        <div class="hint-content">Try <code>?userId=../user/profile/admin</code>. The browser resolves <code>/api/notifications/../user/profile/admin</code> to <code>/api/user/profile/admin</code>. The <code>../</code> goes up one directory level.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: What to look for</button>
+        <div class="hint-content">The admin profile endpoint returns the admin's email, role, and other sensitive info. Use: <code>?userId=../user/profile/admin</code>. The response data gets displayed in the notification area, leaking admin info.</div>
+      </div>
+
+      <h3>Vulnerable Code</h3>
+      <div class="source-code">
+<pre><span class="keyword">var</span> userId = <span class="keyword">new</span> URLSearchParams(
+  location.search
+).get('userId') || '1';
+
+<span class="comment">// VULNERABLE: userId injected into fetch path</span>
+<span class="function">fetch</span>(<span class="string">'/api/notifications/'</span> + <span class="sink">userId</span>)
+  .then(r => r.json())
+  .then(data => {
+    <span class="comment">// Renders whatever the API returns</span>
+    renderData(data);
+  });
+</pre>
+      </div>
+    </div>
+
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#128276; Notification Center</h2>
+          <label>User ID (change to view different user's notifications)</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="userIdInput" placeholder="1" style="margin-bottom:0">
+            <button class="btn btn-primary" onclick="location.search='?userId='+document.getElementById('userIdInput').value">Load</button>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">API Response:</h3>
+          <div id="api-url" style="font-size:12px;color:var(--accent);font-family:monospace;margin-bottom:8px"></div>
+          <div id="notification-display" class="vuln-output" style="min-height:100px">
+            <p style="color:var(--text-muted)">Loading notifications...</p>
+          </div>
+        </div>
+
+        <div id="raw-response" style="margin-top:16px">
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">Raw JSON Response:</h3>
+          <div class="source-code">
+            <pre id="raw-json" style="color:#c9d1d9">Loading...</pre>
+          </div>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:8px">
+          <p style="font-size:13px;color:var(--text-muted)">
+            <strong>Real-world context:</strong> Client-Side Path Traversal occurs when user input is concatenated into a fetch/XHR URL path without sanitization. Unlike server-side path traversal, the browser resolves <code>../</code> sequences BEFORE sending the request. So <code>/api/notifications/../admin/users</code> becomes <code>/api/admin/users</code> at the HTTP level.
+          </p>
+          <p style="font-size:13px;color:var(--text-muted);margin-top:8px">
+            <strong>Bug bounty tip:</strong> Search JavaScript for patterns like <code>fetch('/api/' + param)</code> or <code>$.get('/endpoint/' + id)</code> where the parameter comes from the URL, hash, or user input. Even if the server validates paths, the browser resolves traversals client-side.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('cspt-1', 'xss');
+
+    var params = new URLSearchParams(location.search);
+    var userId = params.get('userId') || '1';
+    document.getElementById('userIdInput').value = userId;
+
+    // VULNERABLE: User input directly in fetch path
+    var apiUrl = '/api/notifications/' + userId;
+    document.getElementById('api-url').textContent = 'Fetching: ' + apiUrl;
+
+    fetch(apiUrl)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        // Display raw JSON
+        document.getElementById('raw-json').textContent = JSON.stringify(data, null, 2);
+
+        // Render the data (works with any JSON structure)
+        var display = document.getElementById('notification-display');
+        var html = '';
+
+        if (data.notifications) {
+          // Normal notification response
+          data.notifications.forEach(function(n) {
+            html += '<div style="padding:10px;margin-bottom:6px;background:var(--bg-primary);border-radius:6px;border-left:3px solid var(--accent)">' +
+              '<div style="font-size:14px">' + n.text + '</div>' +
+              '</div>';
+          });
+        } else if (data.username || data.email) {
+          // Profile response (traversal successful!)
+          html = '<div style="padding:16px;background:rgba(239,68,68,0.1);border:1px solid var(--danger);border-radius:8px">' +
+            '<div style="color:var(--danger);font-weight:bold;margin-bottom:8px">&#9888; Sensitive Data Exposed via CSPT!</div>' +
+            '<div><strong>Username:</strong> ' + (data.username || 'N/A') + '</div>' +
+            '<div><strong>Email:</strong> ' + (data.email || 'N/A') + '</div>' +
+            '<div><strong>Role:</strong> ' + (data.role || 'N/A') + '</div>' +
+            '<div><strong>Bio:</strong> ' + (data.bio || 'N/A') + '</div>' +
+            '</div>';
+
+          // If we got admin data, lab is solved
+          if (data.role === 'admin' || data.username === 'admin') {
+            solveLab('cspt-1');
+          }
+        } else {
+          // Unknown response structure
+          html = '<div style="padding:12px;background:var(--bg-primary);border-radius:6px">';
+          for (var key in data) {
+            html += '<div><strong>' + key + ':</strong> ' + JSON.stringify(data[key]) + '</div>';
+          }
+          html += '</div>';
+        }
+
+        display.innerHTML = html;
+      })
+      .catch(function(err) {
+        document.getElementById('notification-display').innerHTML =
+          '<p style="color:var(--danger)">Error: ' + err.message + '</p>';
+      });
+  </script>
+</body>
+</html>

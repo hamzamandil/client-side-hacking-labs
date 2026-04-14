@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Metrica - Analytics Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', -apple-system, sans-serif; background: #0f0f12; color: #e4e4e7; }
+    .topbar { height: 48px; background: #18181b; border-bottom: 1px solid #27272a; display: flex; align-items: center; padding: 0 20px; justify-content: space-between; }
+    .topbar .brand { font-weight: 800; font-size: 15px; color: #a78bfa; }
+    .topbar .nav-items { display: flex; gap: 20px; }
+    .topbar .nav-items a { font-size: 13px; color: #71717a; text-decoration: none; font-weight: 500; }
+    .topbar .nav-items a:hover { color: #e4e4e7; }
+    .topbar .nav-items a.active { color: #a78bfa; }
+    .topbar .user-section { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #a1a1aa; }
+    .topbar .avatar { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, #7c3aed, #a78bfa); }
+    .dash { display: flex; min-height: calc(100vh - 48px); }
+    .side { width: 200px; background: #18181b; border-right: 1px solid #27272a; padding: 16px 0; flex-shrink: 0; }
+    .side a { display: block; padding: 8px 16px; font-size: 12px; color: #71717a; text-decoration: none; font-weight: 500; }
+    .side a:hover { color: #e4e4e7; background: #1f1f23; }
+    .side a.active { color: #a78bfa; background: rgba(167,139,250,0.08); border-right: 2px solid #a78bfa; }
+    .side .label { font-size: 10px; font-weight: 700; color: #52525b; text-transform: uppercase; letter-spacing: 0.06em; padding: 16px 16px 6px; }
+    .main-area { flex: 1; padding: 24px 28px; overflow-y: auto; }
+    h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; color: #fafafa; }
+    .desc { font-size: 13px; color: #71717a; margin-bottom: 24px; }
+    .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+    .stat-card { background: #18181b; border: 1px solid #27272a; border-radius: 10px; padding: 16px; }
+    .stat-card .label { font-size: 11px; color: #71717a; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+    .stat-card .value { font-size: 24px; font-weight: 800; color: #fafafa; }
+    .stat-card .change { font-size: 12px; margin-top: 4px; font-weight: 600; }
+    .stat-card .change.up { color: #34d399; }
+    .stat-card .change.down { color: #f87171; }
+    .panel { background: #18181b; border: 1px solid #27272a; border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+    .panel-header { padding: 14px 18px; border-bottom: 1px solid #27272a; display: flex; justify-content: space-between; align-items: center; }
+    .panel-header h2 { font-size: 14px; font-weight: 600; color: #e4e4e7; }
+    .panel-body { padding: 18px; }
+    .search-section { display: flex; gap: 8px; margin-bottom: 16px; }
+    .search-input { flex: 1; padding: 9px 14px; background: #0f0f12; border: 1px solid #27272a; border-radius: 8px; color: #e4e4e7; font-size: 13px; }
+    .search-input:focus { outline: none; border-color: #7c3aed; box-shadow: 0 0 0 2px rgba(124,58,237,0.15); }
+    .btn { padding: 8px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid #27272a; background: #18181b; color: #a1a1aa; }
+    .btn:hover { background: #1f1f23; color: #e4e4e7; }
+    .btn-accent { background: #7c3aed; color: white; border-color: #7c3aed; }
+    .btn-accent:hover { background: #6d28d9; }
+    .user-table { width: 100%; border-collapse: collapse; }
+    .user-table th { text-align: left; padding: 8px 12px; font-size: 11px; color: #52525b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid #27272a; }
+    .user-table td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #1f1f23; color: #a1a1aa; }
+    .user-table tr:hover td { background: rgba(124,58,237,0.03); }
+    .tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+    .tag-pro { background: rgba(167,139,250,0.15); color: #a78bfa; }
+    .tag-free { background: rgba(161,161,170,0.1); color: #71717a; }
+    .tag-ent { background: rgba(52,211,153,0.15); color: #34d399; }
+    .events-list { list-style: none; }
+    .events-list li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #1f1f23; font-size: 13px; }
+    .events-list li:last-child { border-bottom: none; }
+    .event-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .event-dot.signup { background: #34d399; }
+    .event-dot.upgrade { background: #a78bfa; }
+    .event-time { font-size: 11px; color: #52525b; margin-left: auto; }
+    #search-results { margin-top: 12px; }
+    #search-results .no-results { color: #52525b; font-size: 13px; font-style: italic; }
+    #user-detail-panel { display: none; background: #1f1f23; border: 1px solid #27272a; border-radius: 10px; padding: 18px; margin-top: 12px; }
+    #user-detail-panel.show { display: block; }
+    .toast { position: fixed; bottom: 20px; right: 20px; background: #166534; color: white; padding: 12px 20px; border-radius: 10px; font-size: 13px; display: none; z-index: 1000; }
+    .toast.show { display: block; }
+    .toast.err { background: #991b1b; }
+    #login-screen { position: fixed; inset: 0; background: #0f0f12; display: flex; align-items: center; justify-content: center; z-index: 9999; }
+    .lf { background: #18181b; border: 1px solid #27272a; padding: 36px; border-radius: 16px; width: 340px; }
+    .lf h2 { font-size: 22px; font-weight: 800; color: #a78bfa; margin-bottom: 4px; }
+    .lf .sub { font-size: 13px; color: #52525b; margin-bottom: 20px; }
+    .lf input { width: 100%; padding: 10px 14px; background: #0f0f12; border: 1px solid #27272a; border-radius: 8px; color: #e4e4e7; font-size: 14px; margin-bottom: 10px; }
+    .lf button { width: 100%; padding: 10px; background: #7c3aed; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <div id="login-screen">
+    <div class="lf">
+      <h2>Metrica</h2>
+      <div class="sub">Analytics Dashboard</div>
+      <input type="text" id="u" placeholder="Username" value="victim">
+      <input type="password" id="p" placeholder="Password" value="password123">
+      <button onclick="authLogin()">Sign In</button>
+      <p style="font-size:11px;color:#3f3f46;margin-top:10px;text-align:center">victim / password123</p>
+    </div>
+  </div>
+
+  <div class="topbar">
+    <div class="brand">Metrica</div>
+    <div class="nav-items">
+      <a href="#" class="active">Dashboard</a>
+      <a href="#">Funnels</a>
+      <a href="#">Cohorts</a>
+      <a href="#">Settings</a>
+    </div>
+    <div class="user-section">
+      <span id="uname">—</span>
+      <div class="avatar"></div>
+    </div>
+  </div>
+
+  <div class="dash">
+    <div class="side">
+      <div class="label">Analytics</div>
+      <a href="#" class="active">Overview</a>
+      <a href="#">Real-time</a>
+      <a href="#">Acquisition</a>
+      <a href="#">Behavior</a>
+      <div class="label">Management</div>
+      <a href="#">Users</a>
+      <a href="#">Events</a>
+      <a href="#">Reports</a>
+      <div class="label">Config</div>
+      <a href="#">Properties</a>
+      <a href="#">Integrations</a>
+    </div>
+
+    <div class="main-area">
+      <h1>Dashboard</h1>
+      <div class="desc">Last 30 days &middot; All properties</div>
+
+      <div class="stat-grid">
+        <div class="stat-card"><div class="label">Total Users</div><div class="value" id="s-users">—</div><div class="change up">+12.4%</div></div>
+        <div class="stat-card"><div class="label">Active Today</div><div class="value" id="s-active">—</div><div class="change up">+8.1%</div></div>
+        <div class="stat-card"><div class="label">Revenue</div><div class="value" id="s-revenue">—</div><div class="change up">+23.6%</div></div>
+        <div class="stat-card"><div class="label">Growth</div><div class="value" id="s-growth">—</div><div class="change down">-2.1%</div></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <!-- User Search Panel -->
+        <div class="panel">
+          <div class="panel-header">
+            <h2>User Search</h2>
+            <span style="font-size:11px;color:#52525b">Real-time lookup</span>
+          </div>
+          <div class="panel-body">
+            <div class="search-section">
+              <input class="search-input" type="text" id="user-search" placeholder="Search by name or email...">
+              <button class="btn btn-accent" onclick="searchUsers()">Search</button>
+            </div>
+            <div id="search-results"></div>
+            <div id="user-detail-panel"></div>
+          </div>
+        </div>
+
+        <!-- Recent Events Panel -->
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Recent Events</h2>
+            <button class="btn" style="font-size:11px;padding:4px 10px">View All</button>
+          </div>
+          <div class="panel-body">
+            <ul class="events-list" id="events-list">
+              <li style="color:#52525b;font-size:13px">Loading events...</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top Pages Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <h2>Top Pages</h2>
+          <div style="display:flex;gap:4px">
+            <button class="btn" style="font-size:11px;padding:4px 10px">7d</button>
+            <button class="btn btn-accent" style="font-size:11px;padding:4px 10px">30d</button>
+            <button class="btn" style="font-size:11px;padding:4px 10px">90d</button>
+          </div>
+        </div>
+        <div class="panel-body" id="top-pages">
+          <div style="color:#52525b;font-size:13px">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!--
+    ================================================================
+    APPLICATION JAVASCRIPT
+    This is the "real" application code you need to audit.
+    Read it carefully. Find the source. Find the sink. Exploit it.
+    ================================================================
+  -->
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('rw-dom-xss-hunt', 'xss');
+
+    // ---- Auth Module ----
+    function authLogin() {
+      var _u = document.getElementById('u').value;
+      var _p = document.getElementById('p').value;
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        credentials: 'include',
+        body: JSON.stringify({username: _u, password: _p})
+      }).then(function(r){return r.json()}).then(function(d){
+        if(d.success){initApp(d.user)}
+      });
+    }
+
+    function initApp(user) {
+      document.getElementById('login-screen').classList.add('hidden');
+      document.getElementById('uname').textContent = user.username;
+      loadDashboard();
+      processDeepLinks();
+    }
+
+    // ---- Dashboard Data ----
+    function loadDashboard() {
+      fetch('/api/dashboard/stats', {credentials:'include'})
+        .then(function(r){return r.json()})
+        .then(function(d){
+          document.getElementById('s-users').textContent = d.totalUsers.toLocaleString();
+          document.getElementById('s-active').textContent = d.activeToday.toLocaleString();
+          document.getElementById('s-revenue').textContent = d.revenue;
+          document.getElementById('s-growth').textContent = d.growth;
+
+          // Render events
+          var evList = document.getElementById('events-list');
+          evList.innerHTML = '';
+          d.recentEvents.forEach(function(ev){
+            var li = document.createElement('li');
+            li.innerHTML = '<div class="event-dot ' + ev.type + '"></div>' +
+              '<span>' + ev.type.charAt(0).toUpperCase() + ev.type.slice(1) + ' — ' + ev.user + '</span>' +
+              '<span class="event-time">' + ev.time + '</span>';
+            evList.appendChild(li);
+          });
+
+          // Render top pages
+          var tp = document.getElementById('top-pages');
+          tp.innerHTML = '<table class="user-table"><thead><tr><th>Page</th><th>Views</th><th>Bounce</th></tr></thead><tbody>';
+          d.topPages.forEach(function(page, i){
+            tp.innerHTML += '<tr><td style="color:#e4e4e7">' + page + '</td><td>' + (4200 - i*1100) + '</td><td>' + (32 + i*8) + '%</td></tr>';
+          });
+          tp.innerHTML += '</tbody></table>';
+        });
+    }
+
+    // ---- User Search ----
+    function searchUsers() {
+      var q = document.getElementById('user-search').value;
+      if (!q) return;
+      fetch('/api/dashboard/search-users?q=' + encodeURIComponent(q), {credentials:'include'})
+        .then(function(r){return r.json()})
+        .then(function(d){
+          renderSearchResults(d);
+        });
+    }
+
+    document.getElementById('user-search').addEventListener('keydown', function(e){
+      if (e.key === 'Enter') searchUsers();
+    });
+
+    function renderSearchResults(data) {
+      var container = document.getElementById('search-results');
+      if (data.results.length === 0) {
+        container.innerHTML = '<div class="no-results">No users found for "' + data.query + '"</div>';
+        return;
+      }
+      var html = '<table class="user-table"><thead><tr><th>Name</th><th>Email</th><th>Plan</th><th></th></tr></thead><tbody>';
+      data.results.forEach(function(u){
+        var tagClass = u.plan === 'Pro' ? 'tag-pro' : u.plan === 'Enterprise' ? 'tag-ent' : 'tag-free';
+        html += '<tr><td style="color:#e4e4e7">' + u.name + '</td><td>' + u.email + '</td>' +
+          '<td><span class="tag ' + tagClass + '">' + u.plan + '</span></td>' +
+          '<td><button class="btn" style="font-size:11px;padding:3px 8px" onclick="viewUser(' + u.id + ')">View</button></td></tr>';
+      });
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    function viewUser(id) {
+      var panel = document.getElementById('user-detail-panel');
+      panel.className = 'show';
+      panel.id = 'user-detail-panel';
+      panel.innerHTML = '<div style="font-size:13px;color:#a1a1aa">Loading user #' + id + '...</div>';
+      // Simulated data
+      setTimeout(function(){
+        panel.innerHTML = '<h3 style="font-size:14px;color:#e4e4e7;margin-bottom:8px">User Details</h3>' +
+          '<div style="font-size:13px;color:#a1a1aa;line-height:1.8">ID: ' + id + '<br>Sessions: 14<br>Last login: 2h ago<br>Country: US</div>';
+      }, 300);
+    }
+
+    // ---- Deep Link / Share URL Module ----
+    // Handles URL parameters for sharing dashboard views
+    // Supports: ?view=users&highlight=<term>&tab=<section>&widget=<config>
+    function processDeepLinks() {
+      var params = new URLSearchParams(window.location.search);
+      var hashParams = parseHashParams();
+
+      // Tab activation from URL
+      var tab = params.get('tab') || hashParams.tab;
+      if (tab) {
+        document.querySelectorAll('.side a').forEach(function(a){
+          a.classList.remove('active');
+          if (a.textContent.trim().toLowerCase().includes(tab.toLowerCase())) {
+            a.classList.add('active');
+          }
+        });
+      }
+
+      // Auto-search from URL (for shared search links)
+      var highlight = params.get('highlight') || hashParams.highlight;
+      if (highlight) {
+        document.getElementById('user-search').value = highlight;
+        searchUsers();
+      }
+
+      // Widget config from URL or hash
+      var widget = params.get('widget') || hashParams.widget;
+      if (widget) {
+        try {
+          var config = JSON.parse(decodeURIComponent(widget));
+          applyWidgetConfig(config);
+        } catch(e) {
+          // Try base64
+          try {
+            var decoded = atob(widget);
+            var config2 = JSON.parse(decoded);
+            applyWidgetConfig(config2);
+          } catch(e2) {}
+        }
+      }
+
+      // Notification banner from URL
+      var notify = params.get('notify') || hashParams.notify;
+      if (notify) {
+        showBanner(decodeURIComponent(notify));
+      }
+
+      // Custom view render
+      var view = params.get('view') || hashParams.view;
+      if (view === 'custom') {
+        var title = params.get('title') || hashParams.title || 'Custom View';
+        var content = params.get('content') || hashParams.content || '';
+        renderCustomView(title, content);
+      }
+    }
+
+    // Parse hash parameters (key=value&key2=value2 after #)
+    function parseHashParams() {
+      var hash = window.location.hash.substring(1);
+      if (!hash) return {};
+      var result = {};
+      hash.split('&').forEach(function(pair){
+        var parts = pair.split('=');
+        if (parts.length === 2) {
+          result[decodeURIComponent(parts[0])] = decodeURIComponent(parts[1]);
+        }
+      });
+      return result;
+    }
+
+    // Apply widget configuration
+    function applyWidgetConfig(config) {
+      if (config.title) {
+        var header = document.querySelector('.main-area h1');
+        if (header) header.textContent = config.title;
+      }
+      if (config.theme) {
+        document.body.style.background = config.theme === 'light' ? '#f8fafc' : '#0f0f12';
+      }
+      if (config.announcement) {
+        showBanner(config.announcement);
+      }
+      if (config.customCSS) {
+        var style = document.createElement('style');
+        style.textContent = config.customCSS;
+        document.head.appendChild(style);
+      }
+    }
+
+    // Show notification banner
+    function showBanner(message) {
+      var banner = document.createElement('div');
+      banner.style.cssText = 'position:fixed;top:48px;left:0;right:0;background:#7c3aed;color:white;padding:10px 20px;font-size:13px;text-align:center;z-index:60;display:flex;justify-content:space-between;align-items:center';
+      // VULNERABLE SINK: innerHTML with user-controlled data from URL parameter
+      banner.innerHTML = '<span>' + message + '</span><button onclick="this.parentElement.remove()" style="background:none;border:none;color:white;cursor:pointer;font-size:16px">×</button>';
+      document.body.appendChild(banner);
+    }
+
+    // Custom view renderer
+    function renderCustomView(title, content) {
+      var mainArea = document.querySelector('.main-area');
+      var customDiv = document.createElement('div');
+      customDiv.className = 'panel';
+      customDiv.style.marginTop = '16px';
+      // Another sink: content from URL is used in innerHTML
+      customDiv.innerHTML = '<div class="panel-header"><h2>' + title + '</h2></div>' +
+        '<div class="panel-body">' + content + '</div>';
+      mainArea.appendChild(customDiv);
+    }
+
+    // ---- Auto-init ----
+    fetch('/api/auth/me', {credentials:'include'})
+      .then(function(r){return r.json()})
+      .then(function(d){
+        if(d.user) initApp(d.user);
+      }).catch(function(){});
+
+    // Listen for hash changes (SPA navigation)
+    window.addEventListener('hashchange', function(){
+      processDeepLinks();
+    });
+  </script>
+</body>
+</html>

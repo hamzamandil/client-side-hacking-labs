@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DevPortal - API Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { background: #f8fafc; margin: 0; font-family: 'Inter', -apple-system, sans-serif; }
+    .dp-sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: 220px; background: #0f172a; padding: 20px 0; }
+    .dp-sidebar .logo { color: #60a5fa; font-weight: 700; font-size: 16px; padding: 0 20px 20px; border-bottom: 1px solid #1e293b; }
+    .dp-sidebar .nav-item { display: block; padding: 10px 20px; color: #94a3b8; font-size: 14px; text-decoration: none; border-left: 3px solid transparent; }
+    .dp-sidebar .nav-item:hover { color: #e2e8f0; background: #1e293b; }
+    .dp-sidebar .nav-item.active { color: #60a5fa; border-left-color: #60a5fa; background: #1e293b; }
+    .dp-main { margin-left: 220px; padding: 24px 32px; }
+    .dp-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .dp-topbar h1 { font-size: 22px; color: #0f172a; }
+    .dp-card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    .dp-card h3 { font-size: 14px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+    .dp-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
+    .dp-stat { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; }
+    .dp-stat .value { font-size: 28px; font-weight: 700; color: #0f172a; }
+    .dp-stat .label { font-size: 13px; color: #64748b; }
+    .dp-key { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8fafc; border-radius: 8px; margin-bottom: 8px; border: 1px solid #e2e8f0; }
+    .dp-key code { font-size: 13px; color: #0f172a; }
+    .dp-key .badge { font-size: 11px; padding: 2px 8px; border-radius: 12px; background: #dcfce7; color: #16a34a; font-weight: 600; }
+    .dp-settings-area { margin-top: 24px; }
+    .dp-settings-area h2 { font-size: 18px; color: #0f172a; margin-bottom: 16px; }
+    .dp-setting-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 8px; }
+    .dp-setting-row .name { font-size: 14px; color: #0f172a; font-weight: 500; }
+    .dp-setting-row .val { font-size: 14px; color: #64748b; }
+  </style>
+</head>
+<body class="capstone-app">
+  <div id="solve-banner" class="capstone-solve-banner"></div>
+
+  <div class="dp-sidebar">
+    <div class="logo">&#9881; DevPortal</div>
+    <a href="#" class="nav-item active">Dashboard</a>
+    <a href="#" class="nav-item">API Keys</a>
+    <a href="#" class="nav-item">Documentation</a>
+    <a href="#" class="nav-item">Webhooks</a>
+    <a href="#" class="nav-item">Logs</a>
+    <a href="#" class="nav-item">Settings</a>
+    <a href="#" class="nav-item">Billing</a>
+  </div>
+
+  <div class="dp-main">
+    <div class="dp-topbar">
+      <h1>API Dashboard</h1>
+      <div style="font-size:13px;color:#64748b">Plan: <strong>Pro</strong> | User: <span id="dp-user">developer</span></div>
+    </div>
+
+    <div class="dp-stats">
+      <div class="dp-stat">
+        <div class="value" id="stat-requests">-</div>
+        <div class="label">API Requests (this month)</div>
+      </div>
+      <div class="dp-stat">
+        <div class="value" id="stat-limit">-</div>
+        <div class="label">Monthly Limit</div>
+      </div>
+      <div class="dp-stat">
+        <div class="value" id="stat-uptime">99.9%</div>
+        <div class="label">Uptime</div>
+      </div>
+    </div>
+
+    <div class="dp-card">
+      <h3>API Keys</h3>
+      <div id="api-keys"></div>
+    </div>
+
+    <div class="dp-settings-area">
+      <h2>Settings</h2>
+      <div id="settings-display">
+        <p style="color:#64748b">Loading settings...</p>
+      </div>
+    </div>
+
+    <div id="settings-title" style="margin-top:16px;font-size:18px;font-weight:600"></div>
+  </div>
+
+  <a href="/labs/capstone/hints/hints3.html" class="capstone-hint-btn">&#128161; Need help?</a>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('cap-3', 'xss');
+
+    var params = new URLSearchParams(location.search);
+    var userId = params.get('user') || '1';
+    var settingsSection = params.get('section') || 'general';
+
+    // Load dashboard data
+    fetch('/api/devportal/dashboard/' + userId)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        document.getElementById('stat-requests').textContent = (data.usage?.requests || 0).toLocaleString();
+        document.getElementById('stat-limit').textContent = (data.usage?.limit || 0).toLocaleString();
+        document.getElementById('dp-user').textContent = data.userId;
+
+        var keysHtml = '';
+        (data.apiKeys || []).forEach(function(k) {
+          keysHtml += '<div class="dp-key"><div><code>' + k.key + '</code><div style="font-size:11px;color:#94a3b8;margin-top:2px">' + k.name + ' &middot; Created ' + k.created + '</div></div><span class="badge">Active</span></div>';
+        });
+        document.getElementById('api-keys').innerHTML = keysHtml || '<p style="color:#94a3b8">No API keys</p>';
+      });
+
+    // VULNERABLE: CSPT — settingsSection from URL goes directly into fetch path
+    fetch('/api/settings/' + settingsSection)
+      .then(function(r) { return r.json(); })
+      .then(function(config) {
+        var html = '';
+        var data = config.data || config;
+        for (var key in data) {
+          if (typeof data[key] !== 'object') {
+            html += '<div class="dp-setting-row"><div class="name">' + key + '</div><div class="val">' + data[key] + '</div></div>';
+          }
+        }
+        document.getElementById('settings-display').innerHTML = html;
+
+        // VULNERABLE: title field from response rendered via innerHTML
+        if (config.title) {
+          document.getElementById('settings-title').innerHTML = config.title;
+        }
+
+        // VULNERABLE: autoApply from response triggers authenticated actions
+        if (config.autoApply && Array.isArray(config.autoApply)) {
+          config.autoApply.forEach(function(action) {
+            fetch(action.endpoint, {
+              method: action.method || 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify(action.body || {})
+            });
+          });
+        }
+      });
+  </script>
+</body>
+</html>

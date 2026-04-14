@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: createContextualFragment XSS - Advanced Level 2</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">Advanced #2: createContextualFragment XSS</span>
+      <span class="difficulty medium">Medium</span>
+    </div>
+  </div>
+  <div id="solve-banner" class="solve-banner"></div>
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Execute <code>alert('XSS')</code> by bypassing the sanitizer. The page strips <code>&lt;script&gt;</code> tags and common event handlers, then uses <code>createContextualFragment()</code> to insert HTML. This sink re-parses and executes handlers the regex missed.</p>
+      </div>
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: What is createContextualFragment?</button>
+        <div class="hint-content"><code>document.createRange().createContextualFragment(html)</code> creates a DocumentFragment by parsing the HTML string. Unlike <code>textContent</code>, it DOES execute event handlers on the parsed elements when they're inserted into the DOM.</div>
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: What the sanitizer misses</button>
+        <div class="hint-content">The sanitizer only removes <code>onerror</code>, <code>onload</code>, and <code>onclick</code>. There are 60+ event handlers in HTML: <code>onfocus</code>, <code>onmouseover</code>, <code>ontoggle</code>, <code>onauxclick</code>, etc. Try handlers the regex doesn't cover.</div>
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Payload</button>
+        <div class="hint-content">Try: <code>&lt;details open ontoggle=alert('XSS')&gt;test&lt;/details&gt;</code> or <code>&lt;input onfocus=alert('XSS') autofocus&gt;</code> or <code>&lt;body onpageshow=alert('XSS')&gt;</code>. The sanitizer won't catch these event handlers.</div>
+      </div>
+      <h3>Vulnerable Code</h3>
+      <div class="source-code">
+<pre><span class="keyword">function</span> <span class="function">sanitize</span>(html) {
+  html = html.replace(/&lt;script[\s\S]*?&lt;\/script&gt;/gi, '');
+  html = html.replace(/\bon(error|load|click)\s*=/gi, '');
+  <span class="keyword">return</span> html;
+}
+
+<span class="keyword">var</span> range = document.<span class="function">createRange</span>();
+<span class="keyword">var</span> frag = range.<span class="sink">createContextualFragment</span>(
+  <span class="function">sanitize</span>(userInput)
+);
+container.<span class="function">appendChild</span>(frag);
+</pre>
+      </div>
+    </div>
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#128172; Rich Text Announcements</h2>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Post announcements with HTML formatting. Script tags and common XSS handlers are filtered for safety.</p>
+          <label>Announcement HTML</label>
+          <textarea id="announceInput" rows="4" placeholder='<b>Important:</b> Server maintenance tonight at <em>11 PM</em>.'></textarea>
+          <button class="btn btn-primary" onclick="postAnnouncement()">Post Announcement</button>
+        </div>
+        <div style="margin-top:16px">
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">Announcements:</h3>
+          <div id="announcements" class="vuln-output" style="min-height:80px">
+            <p style="color:var(--text-muted);font-style:italic">No announcements yet.</p>
+          </div>
+        </div>
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px">
+          <p style="font-size:13px;color:var(--text-secondary)"><strong>Real-world context:</strong> This is based on the HubSpot <code>inlineMessage</code> DOM XSS finding (HIGH severity, 50+ bug bounty targets). The HubSpot form widget used <code>createContextualFragment()</code> to render the inline success message. Even though some handlers were stripped, the range of possible HTML event handlers is enormous. This sink is often overlooked because developers assume only <code>innerHTML</code> and <code>eval()</code> are dangerous.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('adv-2', 'xss');
+
+    function sanitize(html) {
+      // Remove script tags
+      html = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+      // Remove "dangerous" event handlers (incomplete list!)
+      html = html.replace(/\bon(error|load|click)\s*=/gi, '');
+      return html;
+    }
+
+    function postAnnouncement() {
+      var input = document.getElementById('announceInput').value;
+      if (!input.trim()) return;
+
+      var sanitized = sanitize(input);
+      var container = document.getElementById('announcements');
+
+      // Clear placeholder
+      if (container.querySelector('p[style]')) container.innerHTML = '';
+
+      // VULNERABLE: createContextualFragment parses and executes HTML
+      var wrapper = document.createElement('div');
+      wrapper.style.cssText = 'padding:12px;margin-bottom:8px;background:var(--bg-secondary);border-radius:6px;border-left:3px solid var(--accent)';
+
+      var range = document.createRange();
+      range.selectNode(container);
+      var fragment = range.createContextualFragment(
+        '<strong style="color:var(--accent)">Admin:</strong> ' + sanitized +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Just now</div>'
+      );
+
+      wrapper.appendChild(fragment);
+      container.appendChild(wrapper);
+    }
+  </script>
+</body>
+</html>

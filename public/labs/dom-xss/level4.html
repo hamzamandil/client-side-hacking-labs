@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: Template Literal Breakout - DOM XSS Level 4</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">DOM XSS #4: Template Literal Breakout</span>
+      <span class="difficulty medium">Medium</span>
+    </div>
+  </div>
+
+  <div id="solve-banner" class="solve-banner"></div>
+
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Execute <code>alert('XSS')</code> by breaking out of a JavaScript template literal (backtick string).</p>
+        <p style="margin-top:8px;font-size:12px;color:var(--text-muted)">The app uses ES6 template literals with ${} interpolation. Your input goes inside a template literal that builds HTML.</p>
+      </div>
+
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: Template literal syntax</button>
+        <div class="hint-content">Template literals use backticks (<code>`</code>) and <code>${expression}</code> for interpolation. The expression inside <code>${}</code> is evaluated as JavaScript. If you can inject <code>${}</code>, you can run code.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: The injection point</button>
+        <div class="hint-content">Your input is placed directly into a template literal like: <code>`&lt;p&gt;Hello ${userInput}&lt;/p&gt;`</code>. If the input contains <code>${...}</code>, the content is evaluated as JS during string construction.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Payload</button>
+        <div class="hint-content">Try the input: <code>${alert('XSS')}</code> — This gets evaluated as a JavaScript expression inside the template literal. Also try: <code>${constructor.constructor('alert(1)')()}</code> for a more creative approach.</div>
+      </div>
+
+      <h3>Vulnerable Code</h3>
+      <div class="source-code">
+<pre><span class="keyword">var</span> userInput = getParam('greeting');
+
+<span class="comment">// VULNERABLE: User input inside eval'd template</span>
+<span class="keyword">var</span> html = <span class="function">eval</span>(
+  <span class="string">'`&lt;div class="card"&gt;</span>
+    <span class="string">&lt;h3&gt;Greeting Card&lt;/h3&gt;</span>
+    <span class="string">&lt;p&gt;${userInput}&lt;/p&gt;</span>
+  <span class="string">&lt;/div&gt;`'</span>
+);
+container.<span class="sink">innerHTML</span> = html;
+</pre>
+      </div>
+    </div>
+
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#127872; Greeting Card Generator</h2>
+          <label>Create a custom greeting (or use ?greeting= in URL)</label>
+          <input type="text" id="greetingInput" placeholder="Happy Birthday, John!">
+          <button class="btn btn-primary" onclick="generateCard()">Generate Card</button>
+        </div>
+
+        <div id="card-output" class="vuln-output" style="min-height:100px">
+          <p style="color:var(--text-muted)">Generate a greeting card above...</p>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:8px">
+          <p style="font-size:13px;color:var(--text-muted)">
+            <strong>Real-world context:</strong> Some apps use <code>eval()</code> with template literals to build dynamic HTML. This is common in template engines, admin dashboards, and code that migrated from older template systems. The <code>${}</code> syntax is evaluated as JavaScript, making it a code execution vector.
+          </p>
+          <p style="font-size:13px;color:var(--text-muted);margin-top:8px">
+            <strong>Bug bounty tip:</strong> Search for <code>eval(`</code> or <code>new Function(`</code> with user-controlled data flowing into the template. This is less common than innerHTML but much more powerful since it's direct code execution.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('dom-xss-4', 'xss');
+
+    function getParam(name) {
+      return new URLSearchParams(location.search).get(name) || '';
+    }
+
+    function generateCard() {
+      var input = document.getElementById('greetingInput').value;
+      if (input) {
+        // Update URL for sharing
+        history.replaceState(null, '', '?greeting=' + encodeURIComponent(input));
+      }
+      renderCard(input || getParam('greeting'));
+    }
+
+    function renderCard(userInput) {
+      if (!userInput) return;
+
+      try {
+        // VULNERABLE: eval with template literal containing user input
+        // The userInput variable is accessible in the eval scope
+        var html = eval('`<div style="background:linear-gradient(135deg,#1e3a5f,#2d1b4e);border-radius:12px;padding:32px;text-align:center">' +
+          '<h3 style="color:#f59e0b;font-size:20px;margin-bottom:8px">&#127872; Greeting Card</h3>' +
+          '<p style="color:#e2e8f0;font-size:18px;line-height:1.6">${userInput}</p>' +
+          '<p style="color:#64748b;font-size:12px;margin-top:16px">Created with Greeting Card Generator</p>' +
+          '</div>`');
+
+        document.getElementById('card-output').innerHTML = html;
+      } catch(e) {
+        document.getElementById('card-output').innerHTML =
+          '<p style="color:var(--danger)">Error generating card: ' + e.message + '</p>';
+      }
+    }
+
+    // Auto-generate if URL param exists
+    var paramGreeting = getParam('greeting');
+    if (paramGreeting) {
+      document.getElementById('greetingInput').value = paramGreeting;
+      renderCard(paramGreeting);
+    }
+  </script>
+</body>
+</html>

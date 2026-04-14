@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClientSide Academy - Master Client-Side Bug Bounty Hunting</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1f3af;</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #fafafa;
+      --bg-card: #ffffff;
+      --bg-dark: #0a0a0a;
+      --text: #171717;
+      --text-secondary: #525252;
+      --text-muted: #a3a3a3;
+      --border: #e5e5e5;
+      --accent: #2563eb;
+      --accent-light: #dbeafe;
+      --purple: #7c3aed;
+      --emerald: #059669;
+      --amber: #d97706;
+      --rose: #e11d48;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* === NAV === */
+    .nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(255,255,255,0.8);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: 1200px; margin: 0 auto;
+      padding: 0 24px; height: 64px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-brand {
+      font-weight: 800; font-size: 18px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .nav-brand span { color: var(--accent); }
+    .nav-links { display: flex; gap: 32px; align-items: center; }
+    .nav-links a {
+      font-size: 14px; font-weight: 500; color: var(--text-secondary);
+      transition: color 0.15s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta {
+      background: var(--bg-dark) !important; color: #fff !important;
+      padding: 8px 20px; border-radius: 8px; font-weight: 600; font-size: 14px;
+      transition: opacity 0.15s;
+    }
+    .nav-cta:hover { opacity: 0.85; }
+
+    /* === HERO === */
+    .hero {
+      padding: 160px 24px 100px; text-align: center;
+      background: linear-gradient(180deg, #fff 0%, #f5f5f5 100%);
+      position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 800px;
+      background: radial-gradient(circle, rgba(37,99,235,0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      padding: 6px 16px; border-radius: 100px; font-size: 13px;
+      font-weight: 500; color: var(--text-secondary); margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .hero-badge .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--emerald); animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; } 50% { opacity: 0.4; }
+    }
+    .hero h1 {
+      font-size: clamp(40px, 6vw, 72px);
+      font-weight: 900; letter-spacing: -0.03em;
+      line-height: 1.05; max-width: 800px; margin: 0 auto 20px;
+    }
+    .hero h1 .gradient {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--purple) 50%, var(--rose) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      font-size: 18px; color: var(--text-secondary);
+      max-width: 560px; margin: 0 auto 40px; line-height: 1.7;
+    }
+    .hero-buttons { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn-hero {
+      padding: 14px 32px; border-radius: 10px; font-size: 15px;
+      font-weight: 600; transition: all 0.2s; display: inline-flex;
+      align-items: center; gap: 8px; cursor: pointer; border: none;
+    }
+    .btn-dark {
+      background: var(--bg-dark); color: #fff;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .btn-dark:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+    .btn-outline {
+      background: var(--bg-card); color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-outline:hover { border-color: #d4d4d4; background: #f5f5f5; }
+
+    .hero-stats {
+      display: flex; justify-content: center; gap: 48px; margin-top: 60px;
+      padding-top: 40px; border-top: 1px solid var(--border);
+    }
+    .hero-stat { text-align: center; }
+    .hero-stat .number { font-size: 32px; font-weight: 800; color: var(--text); }
+    .hero-stat .label { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+    /* === SECTIONS === */
+    section { padding: 100px 24px; }
+    .section-inner { max-width: 1200px; margin: 0 auto; }
+    .section-header { text-align: center; margin-bottom: 60px; }
+    .section-label {
+      font-size: 13px; font-weight: 600; letter-spacing: 0.05em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 12px;
+    }
+    .section-title {
+      font-size: clamp(28px, 4vw, 40px); font-weight: 800;
+      letter-spacing: -0.02em; margin-bottom: 16px;
+    }
+    .section-desc {
+      font-size: 16px; color: var(--text-secondary);
+      max-width: 560px; margin: 0 auto; line-height: 1.7;
+    }
+
+    /* === FEATURES GRID === */
+    .features-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+    }
+    .feature-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 28px;
+      transition: all 0.2s; cursor: default;
+    }
+    .feature-card:hover {
+      border-color: #d4d4d4;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+      transform: translateY(-2px);
+    }
+    .feature-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; margin-bottom: 16px;
+    }
+    .feature-card h3 {
+      font-size: 16px; font-weight: 700; margin-bottom: 6px;
+    }
+    .feature-card p {
+      font-size: 14px; color: var(--text-secondary); line-height: 1.6;
+    }
+    .feature-card .tag-row {
+      display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px;
+    }
+    .feature-tag {
+      font-size: 11px; padding: 3px 8px; border-radius: 4px;
+      background: #f5f5f5; color: var(--text-secondary); font-weight: 500;
+    }
+
+    /* === LAB CATEGORIES === */
+    .categories-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
+    }
+    .cat-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px 28px;
+      display: flex; align-items: flex-start; gap: 16px;
+      transition: all 0.2s; cursor: pointer; text-decoration: none;
+    }
+    .cat-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 4px 16px rgba(37,99,235,0.08);
+      transform: translateY(-1px);
+    }
+    .cat-icon {
+      width: 48px; height: 48px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; flex-shrink: 0;
+    }
+    .cat-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .cat-card p { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+    .cat-meta {
+      display: flex; gap: 12px; margin-top: 8px; font-size: 12px; color: var(--text-muted);
+    }
+    .cat-meta span { font-weight: 600; }
+
+    /* === WRITEUPS === */
+    .writeups-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+    }
+    .writeup-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px; transition: all 0.2s;
+      cursor: pointer; position: relative; overflow: hidden;
+    }
+    .writeup-card:hover {
+      border-color: #d4d4d4;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+      transform: translateY(-2px);
+    }
+    .writeup-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+    .writeup-card.critical::before { background: var(--rose); }
+    .writeup-card.high::before { background: #f97316; }
+    .writeup-card.medium::before { background: var(--amber); }
+    .writeup-severity {
+      font-size: 11px; font-weight: 700; padding: 2px 8px;
+      border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .sev-critical { background: #fce7f3; color: var(--rose); }
+    .sev-high { background: #fff7ed; color: #ea580c; }
+    .sev-medium { background: #fef3c7; color: var(--amber); }
+    .writeup-card .author {
+      font-size: 12px; color: var(--text-muted); margin-top: 12px;
+    }
+    .writeup-card h3 {
+      font-size: 15px; font-weight: 700; margin: 8px 0 6px; line-height: 1.3;
+    }
+    .writeup-card p {
+      font-size: 13px; color: var(--text-secondary); line-height: 1.5;
+    }
+
+    /* === RESEARCHERS === */
+    .researchers-row {
+      display: flex; gap: 24px; justify-content: center; flex-wrap: wrap;
+    }
+    .researcher {
+      text-align: center; padding: 24px 32px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); min-width: 200px;
+      transition: all 0.2s;
+    }
+    .researcher:hover {
+      border-color: #d4d4d4;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    }
+    .researcher-avatar {
+      width: 56px; height: 56px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; margin: 0 auto 12px; color: white; font-weight: 700;
+    }
+    .researcher h4 { font-size: 15px; font-weight: 700; }
+    .researcher p { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+    /* === CTA === */
+    .cta-section {
+      background: var(--bg-dark); color: white; border-radius: 20px;
+      padding: 80px 40px; text-align: center; margin: 0 24px 80px;
+      max-width: 1200px; margin-left: auto; margin-right: auto;
+    }
+    .cta-section h2 {
+      font-size: clamp(28px, 4vw, 40px); font-weight: 800;
+      margin-bottom: 16px; letter-spacing: -0.02em;
+    }
+    .cta-section p {
+      color: #a3a3a3; font-size: 16px; max-width: 480px;
+      margin: 0 auto 32px; line-height: 1.7;
+    }
+    .btn-cta {
+      background: white; color: var(--bg-dark); padding: 14px 32px;
+      border-radius: 10px; font-size: 15px; font-weight: 700;
+      display: inline-flex; align-items: center; gap: 8px;
+      transition: all 0.2s; border: none; cursor: pointer;
+    }
+    .btn-cta:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(255,255,255,0.2); }
+
+    /* === FOOTER === */
+    footer {
+      border-top: 1px solid var(--border); padding: 40px 24px;
+      text-align: center;
+    }
+    footer p { font-size: 13px; color: var(--text-muted); }
+
+    /* === RESPONSIVE === */
+    @media (max-width: 900px) {
+      .features-grid, .writeups-grid { grid-template-columns: 1fr; }
+      .categories-grid { grid-template-columns: 1fr; }
+      .hero-stats { gap: 24px; flex-wrap: wrap; }
+      .nav-links a:not(.nav-cta) { display: none; }
+    }
+    @media (max-width: 600px) {
+      .hero h1 { font-size: 36px; }
+      .hero-buttons { flex-direction: column; align-items: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <div class="nav-brand">
+        <span>CS</span>Academy
+      </div>
+      <div class="nav-links">
+        <a href="#labs">Labs</a>
+        <a href="#writeups">Writeups</a>
+        <a href="#researchers">Researchers</a>
+        <a href="/dashboard" class="nav-cta">Start Hacking &rarr;</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-badge">
+      <div class="dot"></div>
+      40 labs built from real bug bounty findings
+    </div>
+    <h1>Master <span class="gradient">Client-Side</span> Bug Bounty Hunting</h1>
+    <p>Learn DOM XSS, postMessage exploitation, CORS abuse, OAuth dirty dancing, and bug chains through realistic labs inspired by $10K+ bounty writeups.</p>
+    <div class="hero-buttons">
+      <a href="/dashboard" class="btn-hero btn-dark">Start the Labs &rarr;</a>
+      <a href="#writeups" class="btn-hero btn-outline">Read Writeups</a>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="number">40</div>
+        <div class="label">Hands-on Labs</div>
+      </div>
+      <div class="hero-stat">
+        <div class="number">9</div>
+        <div class="label">Attack Categories</div>
+      </div>
+      <div class="hero-stat">
+        <div class="number">12</div>
+        <div class="label">Real Writeups</div>
+      </div>
+      <div class="hero-stat">
+        <div class="number">7</div>
+        <div class="label">Bug Chains</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHAT YOU'LL LEARN -->
+  <section>
+    <div class="section-inner">
+      <div class="section-header">
+        <div class="section-label">Built Different</div>
+        <h2 class="section-title">Not another XSS cheatsheet</h2>
+        <p class="section-desc">Every lab recreates a real vulnerability found in production. No placeholder challenges. No "try alert(1)". Real sources, real sinks, real chains.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon" style="background:#dbeafe;">&#9889;</div>
+          <h3>Real Vulnerable Code</h3>
+          <p>Each lab runs actual vulnerable JavaScript from real-world patterns &mdash; createContextualFragment, deparam, postMessage handlers without origin checks.</p>
+          <div class="tag-row">
+            <span class="feature-tag">HubSpot</span>
+            <span class="feature-tag">Chatwoot</span>
+            <span class="feature-tag">Typeform</span>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background:#fce7f3;">&#128279;</div>
+          <h3>Bug Chains</h3>
+          <p>Low-severity bugs are noise. Learn to chain Self-XSS + CSRF, CORS + subdomain takeover, CSPT + postMessage + OAuth into account takeovers.</p>
+          <div class="tag-row">
+            <span class="feature-tag">ATO chains</span>
+            <span class="feature-tag">3+ bugs</span>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background:#dcfce7;">&#128176;</div>
+          <h3>Bounty-Ready Skills</h3>
+          <p>Every technique maps to a real bounty range. DOM XSS ($500-$5K), CORS data theft ($1K-$10K), OAuth token theft ($3K-$15K), full ATO chains ($10K+).</p>
+          <div class="tag-row">
+            <span class="feature-tag">HackerOne</span>
+            <span class="feature-tag">Bugcrowd</span>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background:#fef3c7;">&#128269;</div>
+          <h3>Source &rarr; Sink Analysis</h3>
+          <p>Learn to trace data flow from attacker-controlled sources (hash, postMessage, URL params) through the application to dangerous sinks (innerHTML, eval, location).</p>
+          <div class="tag-row">
+            <span class="feature-tag">Static analysis</span>
+            <span class="feature-tag">DOM sinks</span>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background:#ede9fe;">&#128272;</div>
+          <h3>OAuth Dirty Dancing</h3>
+          <p>Master the art of OAuth exploitation &mdash; redirect_uri manipulation, response_type juggling, state parameter attacks, and postMessage gadgets for token theft.</p>
+          <div class="tag-row">
+            <span class="feature-tag">Implicit flow</span>
+            <span class="feature-tag">Token theft</span>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background:#f1f5f9;">&#127919;</div>
+          <h3>Capstone Challenges</h3>
+          <p>6 realistic web apps with no hints. Find the bugs yourself, chain them for impact, prove exploitation. Just like a real bug bounty target.</p>
+          <div class="tag-row">
+            <span class="feature-tag">E-commerce</span>
+            <span class="feature-tag">Banking</span>
+            <span class="feature-tag">Social</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LAB CATEGORIES -->
+  <section id="labs" style="background:#f5f5f5;">
+    <div class="section-inner">
+      <div class="section-header">
+        <div class="section-label">Lab Categories</div>
+        <h2 class="section-title">8 categories. 36 challenges. Zero filler.</h2>
+        <p class="section-desc">From beginner innerHTML traps to expert-level multi-bug account takeover chains.</p>
+      </div>
+      <div class="categories-grid">
+        <a class="cat-card" href="/dashboard#dom-xss">
+          <div class="cat-icon" style="background:#dbeafe;">&#9889;</div>
+          <div>
+            <h3>DOM XSS</h3>
+            <p>innerHTML, document.write, jQuery .html(), template literals, DOM clobbering</p>
+            <div class="cat-meta"><span>5 labs</span> &middot; Easy to Hard</div>
+          </div>
+        </a>
+        <a class="cat-card" href="/dashboard#postmessage">
+          <div class="cat-icon" style="background:#fce7f3;">&#9993;</div>
+          <div>
+            <h3>PostMessage XSS</h3>
+            <p>No origin check, indexOf bypass, eval handler, iframe sandbox escape</p>
+            <div class="cat-meta"><span>4 labs</span> &middot; Easy to Hard</div>
+          </div>
+        </a>
+        <a class="cat-card" href="/dashboard#cspt">
+          <div class="cat-icon" style="background:#dcfce7;">&#128194;</div>
+          <div>
+            <h3>Client-Side Path Traversal</h3>
+            <p>Path injection, filter bypass, response injection, CSPT2CSRF</p>
+            <div class="cat-meta"><span>4 labs</span> &middot; Easy to Hard</div>
+          </div>
+        </a>
+        <a class="cat-card" href="/dashboard#oauth">
+          <div class="cat-icon" style="background:#ede9fe;">&#128274;</div>
+          <div>
+            <h3>OAuth Dirty Dancing</h3>
+            <p>Redirect manipulation, state attacks, response_type juggling, token theft</p>
+            <div class="cat-meta"><span>3 labs</span> &middot; Medium to Expert</div>
+          </div>
+        </a>
+        <a class="cat-card" href="/dashboard#advanced">
+          <div class="cat-icon" style="background:#fef3c7;">&#128161;</div>
+          <div>
+            <h3>Advanced Sinks &amp; Gadgets</h3>
+            <p>Prototype pollution, createContextualFragment, setTimeout strings, CSTI</p>
+            <div class="cat-meta"><span>4 labs</span> &middot; Easy to Hard</div>
+          </div>
+        </a>
+        <a class="cat-card" href="/dashboard#cors">
+          <div class="cat-icon" style="background:#fff7ed;">&#127760;</div>
+          <div>
+            <h3>CORS &amp; Token Theft</h3>
+            <p>Wildcard credentials, subdomain chain, postMessage PII exfiltration</p>
+            <div class="cat-meta"><span>3 labs</span> &middot; Medium to Expert</div>
+          </div>
+        </a>
+        <a class="cat-card" href="/dashboard#chains">
+          <div class="cat-icon" style="background:#fce7f3;">&#128279;</div>
+          <div>
+            <h3>Bug Chains</h3>
+            <p>Self-XSS+CSRF, DOM XSS+ATO, OAuth+postMessage, CSPT+OAuth mega chains</p>
+            <div class="cat-meta"><span>7 labs</span> &middot; Hard to Expert</div>
+          </div>
+        </a>
+        <a class="cat-card" href="/dashboard#capstone">
+          <div class="cat-icon" style="background:#f1f5f9;">&#127942;</div>
+          <div>
+            <h3>Capstone Challenges</h3>
+            <p>ShopEZ, ChatConnect, DevPortal, SecureAuth, SocialHub, FinanceApp</p>
+            <div class="cat-meta"><span>6 labs</span> &middot; Medium to Expert</div>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- WRITEUPS -->
+  <section id="writeups">
+    <div class="section-inner">
+      <div class="section-header">
+        <div class="section-label">Learn From The Best</div>
+        <h2 class="section-title">Real-world writeups. Real impact.</h2>
+        <p class="section-desc">Every writeup breaks down a real vulnerability, explains the thought process, and shows how to chain for maximum impact.</p>
+      </div>
+      <div class="writeups-grid">
+        <a class="writeup-card critical" href="/writeups/dom-xss-createcontextualfragment">
+          <span class="writeup-severity sev-critical">Critical</span>
+          <h3>DOM XSS via createContextualFragment in Widget SDK</h3>
+          <p>How a single unsafe DOM API in HubSpot Forms affected 50+ bug bounty targets. Supply-chain XSS at scale.</p>
+          <div class="author">Inspired by xssdoctor's widget research</div>
+        </a>
+        <a class="writeup-card critical" href="/writeups/cors-wildcard-credential-theft">
+          <span class="writeup-severity sev-critical">Critical</span>
+          <h3>CORS Wildcard + Subdomain Takeover = Full ATO</h3>
+          <p>Chaining *.grammarly.com CORS with a dangling CNAME to steal auth tokens, user data, and bypass CSRF.</p>
+          <div class="author">Inspired by Vitor Falcao's CORS research</div>
+        </a>
+        <a class="writeup-card high" href="/writeups/prototype-pollution-xss-chain">
+          <span class="writeup-severity sev-high">High</span>
+          <h3>Prototype Pollution via deparam to XSS</h3>
+          <p>Hash-based prototype pollution in a tracking script bypasses WAFs and chains to XSS via script gadgets on every instrumented site.</p>
+          <div class="author">Inspired by matanber's CSPT/PP research</div>
+        </a>
+        <a class="writeup-card critical" href="/writeups/postmessage-no-origin-check">
+          <span class="writeup-severity sev-critical">Critical</span>
+          <h3>PostMessage Without Origin Check in Chat Widget</h3>
+          <p>Zero origin validation in Chatwoot SDK enables window.open injection, cookie manipulation, and open redirect on any site using the widget.</p>
+          <div class="author">Inspired by renwa's postMessage research</div>
+        </a>
+        <a class="writeup-card high" href="/writeups/oauth-dirty-dancing">
+          <span class="writeup-severity sev-high">High</span>
+          <h3>OAuth Dirty Dancing: Open Redirect to Token Theft</h3>
+          <p>Chaining open redirect on admin.uber.com with OAuth implicit flow and postMessage gadgets to steal access tokens.</p>
+          <div class="author">Inspired by xssdoctor's OAuth research</div>
+        </a>
+        <a class="writeup-card high" href="/writeups/cors-any-origin-health-data">
+          <span class="writeup-severity sev-high">High</span>
+          <h3>CORS Reflects Any Origin: Silent Health Data Theft</h3>
+          <p>api.myfitnesspal.com reflects ANY origin with credentials. 200M users' health data stealable from any website. No XSS needed.</p>
+          <div class="author">Inspired by Vitor Falcao's CORS hunting</div>
+        </a>
+        <a class="writeup-card high" href="/writeups/postmessage-pii-exfiltration">
+          <span class="writeup-severity sev-high">High</span>
+          <h3>PostMessage PII Leak via Widget Framing</h3>
+          <p>Booking widget broadcasts PII (name, email, phone) to wildcard origin. Frame it, intercept the data, exfiltrate silently.</p>
+          <div class="author">Inspired by renwa's widget analysis</div>
+        </a>
+        <a class="writeup-card high" href="/writeups/cspt-to-xss">
+          <span class="writeup-severity sev-high">High</span>
+          <h3>Client-Side Path Traversal to Stored XSS</h3>
+          <p>User input in fetch URL path + file upload = attacker controls the API response. Response rendered as HTML = XSS. Chain to CSRF for ATO.</p>
+          <div class="author">Inspired by matanber's CSPT research</div>
+        </a>
+        <a class="writeup-card critical" href="/writeups/mega-chain-ato">
+          <span class="writeup-severity sev-critical">Critical</span>
+          <h3>The Grand Chain: CSPT + PostMessage + OAuth = ATO</h3>
+          <p>Three client-side bugs chained into full account takeover. CSPT injects response, postMessage leaks URL, OAuth steals token. One click, game over.</p>
+          <div class="author">Inspired by xssdoctor &amp; matanber</div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESEARCHERS -->
+  <section id="researchers" style="background:#f5f5f5;">
+    <div class="section-inner">
+      <div class="section-header">
+        <div class="section-label">Standing on Giants</div>
+        <h2 class="section-title">Inspired by top researchers</h2>
+        <p class="section-desc">Labs and writeups are modeled after techniques pioneered by these client-side security researchers.</p>
+      </div>
+      <div class="researchers-row">
+        <div class="researcher">
+          <div class="researcher-avatar">X</div>
+          <h4>xssdoctor</h4>
+          <p>DOM XSS, OAuth dirty dancing, widget supply-chain attacks</p>
+        </div>
+        <div class="researcher">
+          <div class="researcher-avatar">R</div>
+          <h4>renwa</h4>
+          <p>postMessage exploitation, origin bypass, PII exfiltration</p>
+        </div>
+        <div class="researcher">
+          <div class="researcher-avatar">M</div>
+          <h4>matanber</h4>
+          <p>CSPT, prototype pollution, WAF bypass, encoding tricks</p>
+        </div>
+        <div class="researcher">
+          <div class="researcher-avatar">V</div>
+          <h4>Vitor Falcao</h4>
+          <p>CORS exploitation, credential theft, subdomain chains</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <div style="padding:40px 0;">
+    <div class="cta-section">
+      <h2>Stop reading. Start exploiting.</h2>
+      <p>36 labs. Real vulnerabilities. Real chains. Real impact. No signup required &mdash; just open localhost and start hacking.</p>
+      <a href="/dashboard" class="btn-cta">Launch the Dashboard &rarr;</a>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <p>ClientSide Academy &mdash; Built for bug bounty hunters who want to actually find bugs, not just read about them.</p>
+  </footer>
+
+</body>
+</html>

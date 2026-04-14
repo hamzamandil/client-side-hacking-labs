@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShopEZ - Your One-Stop Shop</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { background: #f9fafb; margin: 0; font-family: 'Inter', -apple-system, sans-serif; }
+    .shop-header { background: #1d4ed8; color: white; padding: 14px 32px; display: flex; justify-content: space-between; align-items: center; }
+    .shop-header h1 { font-size: 20px; font-weight: 700; }
+    .shop-header nav a { color: rgba(255,255,255,0.85); margin-left: 24px; font-size: 14px; text-decoration: none; }
+    .shop-header nav a:hover { color: white; }
+    .shop-search { background: white; border-bottom: 1px solid #e5e7eb; padding: 16px 32px; }
+    .shop-search form { display: flex; gap: 8px; max-width: 600px; }
+    .shop-search input { flex: 1; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; }
+    .shop-search button { background: #1d4ed8; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    .shop-main { max-width: 1100px; margin: 24px auto; padding: 0 24px; }
+    .shop-results-info { margin-bottom: 16px; font-size: 14px; color: #6b7280; }
+    .shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+    .product-card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; transition: box-shadow 0.2s; }
+    .product-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+    .product-emoji { font-size: 48px; text-align: center; padding: 16px 0; }
+    .product-name { font-size: 16px; font-weight: 600; color: #111827; margin-bottom: 4px; }
+    .product-price { font-size: 20px; font-weight: 700; color: #1d4ed8; margin-bottom: 8px; }
+    .product-meta { display: flex; justify-content: space-between; font-size: 13px; color: #6b7280; }
+    .product-rating { color: #f59e0b; }
+    .product-btn { display: block; width: 100%; padding: 10px; background: #1d4ed8; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; margin-top: 12px; }
+    .product-btn:hover { background: #1e40af; }
+    .shop-category { display: inline-block; background: #eff6ff; color: #1d4ed8; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; margin-bottom: 8px; }
+    .shop-footer { text-align: center; padding: 32px; color: #9ca3af; font-size: 13px; margin-top: 40px; border-top: 1px solid #e5e7eb; }
+  </style>
+</head>
+<body class="capstone-app">
+  <div id="solve-banner" class="capstone-solve-banner"></div>
+
+  <div class="shop-header">
+    <h1>&#128722; ShopEZ</h1>
+    <nav>
+      <a href="#">Home</a>
+      <a href="#">Categories</a>
+      <a href="#">Deals</a>
+      <a href="#">Cart (0)</a>
+      <a href="#">Account</a>
+    </nav>
+  </div>
+
+  <div class="shop-search">
+    <form onsubmit="doSearch(event)">
+      <input type="text" id="searchInput" placeholder="Search products...">
+      <button type="submit">Search</button>
+    </form>
+  </div>
+
+  <div class="shop-main">
+    <div id="search-results-info" class="shop-results-info"></div>
+    <div id="product-grid" class="shop-grid"></div>
+  </div>
+
+  <div class="shop-footer">
+    &copy; 2024 ShopEZ Inc. All rights reserved. | Privacy Policy | Terms of Service
+  </div>
+
+  <a href="/labs/capstone/hints/hints1.html" class="capstone-hint-btn">&#128161; Need help?</a>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('cap-1', 'xss');
+
+    function doSearch(e) {
+      if (e) e.preventDefault();
+      var q = document.getElementById('searchInput').value;
+      if (q) {
+        var url = new URL(window.location);
+        url.searchParams.set('q', q);
+        window.history.pushState({}, '', url);
+      }
+      loadProducts();
+    }
+
+    function sanitizeInput(str) {
+      // Security: remove dangerous tags
+      str = str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+      str = str.replace(/<iframe/gi, '&lt;iframe');
+      str = str.replace(/javascript:/gi, '');
+      return str;
+    }
+
+    function loadProducts() {
+      var q = new URLSearchParams(location.search).get('q') || '';
+      if (q) document.getElementById('searchInput').value = q;
+
+      fetch('/api/shop/products?q=' + encodeURIComponent(q))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          // Show results info with highlighted query
+          var infoEl = document.getElementById('search-results-info');
+          if (data.query) {
+            // VULNERABLE: resultHtml from API is passed through sanitizer but innerHTML renders it
+            infoEl.innerHTML = sanitizeInput(data.resultHtml) + ' (' + data.results.length + ' products)';
+          } else {
+            infoEl.textContent = 'All Products (' + data.results.length + ')';
+          }
+
+          // Render products
+          var grid = document.getElementById('product-grid');
+          grid.innerHTML = data.results.map(function(p) {
+            return '<div class="product-card">' +
+              '<div class="product-emoji">' + p.image + '</div>' +
+              '<span class="shop-category">' + p.category + '</span>' +
+              '<div class="product-name">' + p.name + '</div>' +
+              '<div class="product-price">$' + p.price.toFixed(2) + '</div>' +
+              '<div class="product-meta"><span class="product-rating">' + '&#9733;'.repeat(Math.round(p.rating)) + ' ' + p.rating + '</span><span>' + p.reviews + ' reviews</span></div>' +
+              '<button class="product-btn">Add to Cart</button>' +
+              '</div>';
+          }).join('');
+
+          if (data.results.length === 0) {
+            grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#6b7280"><p style="font-size:18px">No products found</p><p>Try a different search term</p></div>';
+          }
+        });
+    }
+
+    loadProducts();
+  </script>
+</body>
+</html>

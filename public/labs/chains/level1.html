@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: Self-XSS + CSRF = Stored XSS - Chain Level 1</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">Chain #1: Self-XSS + CSRF = Stored XSS</span>
+      <span class="difficulty hard">Hard</span>
+    </div>
+  </div>
+
+  <div id="solve-banner" class="solve-banner"></div>
+
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>The victim's bio field is vulnerable to XSS, but it's "self-only" — you can only edit your own bio. However, the profile update endpoint has no CSRF protection. Chain Self-XSS + CSRF to inject stored XSS into the victim's profile.</p>
+        <p style="margin-top:8px;font-size:12px;color:var(--text-muted)">Goal: Make the victim's bio execute <code>alert('XSS')</code> when their profile is viewed.</p>
+      </div>
+
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: The Self-XSS</button>
+        <div class="hint-content">The bio field renders with innerHTML. If you set your own bio to <code>&lt;img src=x onerror=alert('XSS')&gt;</code>, it executes when your profile is viewed. But this is "self-XSS" — only affects you. Not reportable alone.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: The CSRF</button>
+        <div class="hint-content">The <code>POST /api/user/profile/update</code> endpoint accepts JSON, uses cookie-based auth, and has NO CSRF token. Any page can make this request on behalf of a logged-in user using <code>fetch()</code> with <code>credentials:'include'</code>.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: The chain</button>
+        <div class="hint-content">Create an attacker page that, when visited by a logged-in victim, sends a CSRF request to update their bio with an XSS payload. Steps:<br>
+          1. Log in as victim<br>
+          2. Open the CSRF attack page<br>
+          3. The attack page auto-submits a request to update the victim's bio<br>
+          4. View the victim's profile — XSS fires!
+        </div>
+      </div>
+
+      <h3>Vulnerable Code</h3>
+      <div class="source-code">
+<pre><span class="comment">// Profile update: NO CSRF token check</span>
+app.post('/api/user/profile/update',
+  requireAuth, (req, res) => {
+    user.bio = req.body.bio; <span class="comment">// Stored!</span>
+  }
+);
+
+<span class="comment">// Profile display: innerHTML (XSS sink)</span>
+bioEl.<span class="sink">innerHTML</span> = userData.bio;
+</pre>
+      </div>
+    </div>
+
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+
+        <!-- Login -->
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#128274; Login</h2>
+          <div style="display:flex;gap:8px;align-items:end">
+            <div style="flex:1">
+              <label>Username</label>
+              <input type="text" id="loginUser" value="victim" style="margin-bottom:0">
+            </div>
+            <div style="flex:1">
+              <label>Password</label>
+              <input type="password" id="loginPass" value="password123" style="margin-bottom:0">
+            </div>
+            <button class="btn btn-primary" onclick="doLogin()">Login</button>
+          </div>
+          <div id="login-status" style="margin-top:8px;font-size:13px"></div>
+        </div>
+
+        <!-- Profile View -->
+        <div class="lab-form" style="margin-top:16px">
+          <h2 style="margin-bottom:16px">&#128100; User Profile</h2>
+          <div style="display:flex;gap:16px;align-items:start">
+            <div style="width:60px;height:60px;border-radius:50%;background:var(--border);flex-shrink:0"></div>
+            <div style="flex:1">
+              <h3 id="profile-name" style="margin-bottom:4px">Loading...</h3>
+              <div style="font-size:13px;color:var(--text-muted)" id="profile-email">...</div>
+              <div style="margin-top:8px">
+                <strong style="font-size:13px;color:var(--text-muted)">Bio:</strong>
+                <div id="profile-bio" class="vuln-output" style="margin-top:4px;min-height:40px">
+                  Loading...
+                </div>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-secondary" onclick="loadProfile()" style="margin-top:12px">Refresh Profile</button>
+        </div>
+
+        <!-- Self-XSS Demo -->
+        <div class="lab-form" style="margin-top:16px">
+          <h2 style="margin-bottom:16px">&#9999; Edit Bio (Self-XSS here)</h2>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:8px">Try putting XSS in your own bio — it works, but it's only "self-XSS" since you can only edit your own profile.</p>
+          <textarea id="bioInput" rows="3" placeholder='<img src=x onerror=alert("XSS")>'></textarea>
+          <button class="btn btn-primary" onclick="updateBio()">Update My Bio</button>
+        </div>
+
+        <hr style="border-color:var(--border);margin:24px 0">
+
+        <!-- CSRF Attack Section -->
+        <div class="lab-form" style="border:1px solid var(--danger);background:rgba(239,68,68,0.05)">
+          <h2 style="color:var(--danger);margin-bottom:12px">&#9760; CSRF Attack Page</h2>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">This simulates an attacker's page. When a logged-in victim visits this section, it auto-fires a CSRF request to update their bio with XSS.</p>
+
+          <label>XSS Payload for victim's bio</label>
+          <input type="text" id="xssPayload" value='<img src=x onerror=alert("XSS")>'>
+
+          <button class="btn btn-danger" onclick="launchCSRF()">Launch CSRF Attack (updates victim's bio)</button>
+          <div id="csrf-status" style="margin-top:8px;font-size:13px"></div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="attacker-console">
+            <div class="title">Attack Log</div>
+            <div id="attack-log">
+              <div class="log" style="color:var(--text-muted)">Ready. Login as victim, then launch the CSRF attack.</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:8px">
+          <p style="font-size:13px;color:var(--text-muted)">
+            <strong>Real-world context:</strong> Self-XSS is often marked as "informational" or "won't fix" by programs. But when combined with CSRF, it becomes stored XSS affecting other users — a valid HIGH severity finding. The chain: any logged-in user who visits the attacker's page gets their profile infected with persistent XSS, which then fires for anyone viewing that profile.
+          </p>
+          <p style="font-size:13px;color:var(--text-muted);margin-top:8px">
+            <strong>Bug bounty tip:</strong> Whenever you find self-XSS, immediately check if the endpoint that stores the data has CSRF protection. If not, you have a valid stored XSS chain that most programs will accept.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('chain-1', 'xss');
+    var attackLog = document.getElementById('attack-log');
+
+    function doLogin() {
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          username: document.getElementById('loginUser').value,
+          password: document.getElementById('loginPass').value
+        })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          document.getElementById('login-status').innerHTML =
+            '<span style="color:var(--success)">Logged in as ' + data.user.username + '</span>';
+          loadProfile();
+        } else {
+          document.getElementById('login-status').innerHTML =
+            '<span style="color:var(--danger)">Login failed</span>';
+        }
+      });
+    }
+
+    function loadProfile() {
+      fetch('/api/auth/me', { credentials: 'include' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.user) {
+            document.getElementById('profile-name').textContent = data.user.username;
+            document.getElementById('profile-email').textContent = data.user.email;
+            // Fetch full profile with bio
+            return fetch('/api/user/profile/' + data.user.username);
+          }
+        })
+        .then(r => r ? r.json() : null)
+        .then(profile => {
+          if (profile) {
+            // VULNERABLE: innerHTML with stored bio data
+            document.getElementById('profile-bio').innerHTML = profile.bio || '<span style="color:var(--text-muted)">No bio set</span>';
+          }
+        });
+    }
+
+    function updateBio() {
+      var bio = document.getElementById('bioInput').value;
+      fetch('/api/user/profile/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ bio: bio })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          attackLog.innerHTML += '<div class="log">Bio updated via normal form</div>';
+          loadProfile();
+        }
+      });
+    }
+
+    function launchCSRF() {
+      var payload = document.getElementById('xssPayload').value;
+
+      attackLog.innerHTML += '<div class="log" style="color:var(--danger)">Launching CSRF attack...</div>';
+      attackLog.innerHTML += '<div class="log">Payload: ' + payload.substring(0, 60) + '</div>';
+
+      // CSRF: No CSRF token needed! Cookie auth + credentials:include
+      fetch('/api/user/profile/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ bio: payload })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          attackLog.innerHTML += '<div class="log" style="color:var(--success)">CSRF successful! Victim\'s bio updated with XSS payload.</div>';
+          document.getElementById('csrf-status').innerHTML =
+            '<span style="color:var(--danger)">CSRF fired! Click "Refresh Profile" to see the stored XSS execute.</span>';
+          // Reload profile to trigger the stored XSS
+          setTimeout(loadProfile, 500);
+        }
+      })
+      .catch(err => {
+        attackLog.innerHTML += '<div class="log" style="color:var(--danger)">Error: ' + err.message + '</div>';
+      });
+    }
+
+    // Auto-login check
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.user) {
+          document.getElementById('login-status').innerHTML =
+            '<span style="color:var(--success)">Already logged in as ' + data.user.username + '</span>';
+          loadProfile();
+        }
+      }).catch(() => {});
+  </script>
+</body>
+</html>

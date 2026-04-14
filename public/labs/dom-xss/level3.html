@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: jQuery Sink Exploitation - DOM XSS Level 3</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body class="lab-page">
+
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">DOM XSS #3: jQuery Sink Exploitation</span>
+      <span class="difficulty medium">Medium</span>
+    </div>
+  </div>
+
+  <div id="solve-banner" class="solve-banner"></div>
+
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Execute <code>alert('XSS')</code> by bypassing the input filter and exploiting the jQuery <code>.html()</code> sink.</p>
+        <p style="margin-top:8px;font-size:12px;color:var(--text-muted)">The app has a "sanitizer" that tries to block XSS. Find a way around it.</p>
+      </div>
+
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: What does the filter block?</button>
+        <div class="hint-content">The filter uses a regex to remove <code>&lt;script&gt;</code> tags and <code>on*=</code> event handlers. But regex-based HTML sanitization is almost always bypassable.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: Case sensitivity</button>
+        <div class="hint-content">The regex uses case-insensitive matching for script tags, but what about the onerror handler? Check if the regex handles mixed case or newlines in event handlers.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Bypass techniques</button>
+        <div class="hint-content">Try: <code>&lt;img src=x oNeRrOr=alert('XSS')&gt;</code> (mixed case) or <code>&lt;svg/onload=alert('XSS')&gt;</code> (different tag) or <code>&lt;details open ontoggle=alert('XSS')&gt;</code>. The filter only strips specific patterns, not all vectors.</div>
+      </div>
+
+      <h3>Vulnerable Code</h3>
+      <div class="source-code">
+<pre><span class="keyword">function</span> <span class="function">sanitize</span>(input) {
+  <span class="comment">// Remove script tags</span>
+  input = input.<span class="function">replace</span>(
+    /&lt;script\b[^&lt;]*(?:(?!&lt;\/script&gt;)&lt;[^&lt;]*)*&lt;\/script&gt;/gi,
+    ''
+  );
+  <span class="comment">// Remove onerror/onload handlers</span>
+  input = input.<span class="function">replace</span>(
+    /\bon(error|load)\s*=/gi, ''
+  );
+  <span class="keyword">return</span> input;
+}
+
+<span class="comment">// Sink: jQuery .html()</span>
+$('#comment-display').<span class="sink">html</span>(
+  <span class="function">sanitize</span>(userInput)
+);
+</pre>
+      </div>
+    </div>
+
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#128172; Comment Section</h2>
+          <label>Leave a comment (HTML is partially allowed for formatting)</label>
+          <textarea id="commentInput" rows="4" placeholder="Write your comment... HTML like <b>bold</b> and <i>italic</i> is allowed."></textarea>
+          <button class="btn btn-primary" onclick="postComment()">Post Comment</button>
+        </div>
+
+        <div style="margin-top:16px">
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">Comments:</h3>
+          <div id="comment-display" class="vuln-output">
+            <p style="color:var(--text-muted);font-style:italic">No comments yet. Be the first to comment!</p>
+          </div>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:8px">
+          <p style="font-size:13px;color:var(--text-muted)">
+            <strong>Real-world context:</strong> Many apps try to allow "safe HTML" (bold, italic, links) while blocking dangerous tags. Regex-based filters are notoriously brittle. jQuery's .html() is equivalent to innerHTML — it parses and executes any HTML it receives. In the real world, look for any jQuery .html(), .append(), .prepend(), .after(), .before() calls with user-controlled data.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('dom-xss-3', 'xss');
+
+    function sanitize(input) {
+      // "Security" filter - tries to remove dangerous HTML
+      // Remove script tags (case insensitive)
+      input = input.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+      // Remove onerror and onload attributes
+      input = input.replace(/\bon(error|load)\s*=/gi, '');
+      return input;
+    }
+
+    function postComment() {
+      var input = document.getElementById('commentInput').value;
+      if (!input.trim()) return;
+
+      var sanitized = sanitize(input);
+
+      // VULNERABLE: jQuery .html() with "sanitized" (but bypassable) input
+      var commentHtml = '<div style="padding:12px;margin-bottom:8px;background:var(--bg-primary);border-radius:6px">' +
+        '<strong style="color:var(--accent)">Anonymous:</strong> ' +
+        sanitized +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Just now</div>' +
+        '</div>';
+
+      var currentHtml = $('#comment-display').html();
+      if (currentHtml.includes('No comments yet')) {
+        $('#comment-display').html(commentHtml);
+      } else {
+        $('#comment-display').html(currentHtml + commentHtml);
+      }
+    }
+  </script>
+</body>
+</html>

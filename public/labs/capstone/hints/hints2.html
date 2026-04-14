@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hints - ChatConnect</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="hints-page">
+  <div class="hints-header">
+    <a href="/labs/capstone/capstone2.html" style="font-size:14px">&larr; Back to ChatConnect</a>
+    <span style="font-size:14px;color:var(--text-muted)">Capstone #2 Hints</span>
+  </div>
+  <div class="hints-body">
+    <h2 style="margin-bottom:4px">ChatConnect - Hints</h2>
+    <p style="color:var(--text-muted);font-size:14px;margin-bottom:24px">Only reveal what you need. Try to solve it yourself first.</p>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 1: What to investigate</button>
+    <div class="hint-content">The chat widget isn't just a visual component. Open DevTools and look at the JavaScript. The widget listens for something beyond user chat input. Search the source for <code>addEventListener</code>.</div>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 2: The listener</button>
+    <div class="hint-content">The widget has a <code>window.addEventListener('message', ...)</code> handler — it accepts postMessage events. Read the handler carefully. What actions does it support? What origin check does it use?</div>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 3: The weakness</button>
+    <div class="hint-content">The origin check uses <code>indexOf('localhost')</code> which is weak — but since you're already on localhost, your messages pass anyway. The handler supports three actions: <code>updateWidget</code> (innerHTML sink), <code>setAgentName</code> (innerHTML sink), and <code>execCommand</code> (eval sink).</div>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 4: The attack</button>
+    <div class="hint-content">You need to send a postMessage to the page. You can do this from the browser console, from the attacker page at <code>/labs/attacker/postmessage-attacker.html</code>, or by opening the capstone in a new window and sending messages from another tab. The message format is JSON with an <code>action</code> field.</div>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 5: Near-solution</button>
+    <div class="hint-content">Open the browser console on the ChatConnect page and try: <code>window.postMessage(JSON.stringify({action:'execCommand',cmd:'alert("XSS")'}), '*')</code>. The <code>execCommand</code> action passes your <code>cmd</code> string directly to <code>eval()</code>.</div>
+  </div>
+  <script src="/js/app.js"></script>
+</body>
+</html>

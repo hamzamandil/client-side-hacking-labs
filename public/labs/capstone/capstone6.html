@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinanceApp - Your Banking Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { background: #f0f2f5; margin: 0; font-family: 'Inter', -apple-system, sans-serif; }
+    .fa-header { background: #0c4a6e; color: white; padding: 12px 32px; display: flex; justify-content: space-between; align-items: center; }
+    .fa-header h1 { font-size: 18px; font-weight: 700; }
+    .fa-header nav a { color: rgba(255,255,255,0.8); margin-left: 20px; font-size: 14px; text-decoration: none; }
+    .fa-main { max-width: 960px; margin: 24px auto; padding: 0 24px; }
+    .fa-welcome { margin-bottom: 20px; }
+    .fa-welcome h2 { font-size: 22px; color: #0f172a; }
+    .fa-welcome p { color: #64748b; font-size: 14px; }
+    .fa-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+    .fa-card { background: white; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0; }
+    .fa-card .label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+    .fa-card .value { font-size: 28px; font-weight: 700; color: #0f172a; }
+    .fa-card .value.green { color: #16a34a; }
+    .fa-section { background: white; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 20px; overflow: hidden; }
+    .fa-section-header { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; font-size: 15px; font-weight: 600; color: #0f172a; }
+    .fa-txn { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid #f8fafc; }
+    .fa-txn:last-child { border-bottom: none; }
+    .fa-txn .desc { font-size: 14px; color: #0f172a; }
+    .fa-txn .date { font-size: 12px; color: #94a3b8; }
+    .fa-txn .amount { font-weight: 600; }
+    .fa-txn .amount.credit { color: #16a34a; }
+    .fa-txn .amount.debit { color: #0f172a; }
+    .fa-transfer { padding: 20px; }
+    .fa-transfer label { display: block; font-size: 13px; color: #374151; font-weight: 500; margin-bottom: 4px; }
+    .fa-transfer input { width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; margin-bottom: 12px; box-sizing: border-box; }
+    .fa-transfer button { background: #0c4a6e; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    .fa-login-bar { background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+    .fa-login-bar button { background: #0c4a6e; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; }
+    .fa-config-area { margin-top: 8px; }
+    #config-display { font-size: 12px; color: #94a3b8; }
+  </style>
+</head>
+<body class="capstone-app">
+  <div id="solve-banner" class="capstone-solve-banner"></div>
+
+  <div class="fa-header">
+    <h1>&#127974; FinanceApp</h1>
+    <nav>
+      <a href="#">Dashboard</a>
+      <a href="#">Transfers</a>
+      <a href="#">Cards</a>
+      <a href="#">Settings</a>
+      <a href="#" id="fa-user">Sign In</a>
+    </nav>
+  </div>
+
+  <div class="fa-main">
+    <div class="fa-login-bar" id="login-bar">
+      <span style="font-size:14px;color:#92400e">Sign in to access your banking dashboard</span>
+      <button onclick="doLogin()">Sign In (victim / password123)</button>
+    </div>
+
+    <div class="fa-welcome">
+      <h2 id="welcome-msg">Welcome to FinanceApp</h2>
+      <p>Manage your accounts, transfers, and investments</p>
+    </div>
+
+    <div class="fa-cards">
+      <div class="fa-card">
+        <div class="label">Account Balance</div>
+        <div class="value" id="balance">$--</div>
+      </div>
+      <div class="fa-card">
+        <div class="label">This Month</div>
+        <div class="value green" id="monthly">+$--</div>
+      </div>
+      <div class="fa-card">
+        <div class="label">Account ID</div>
+        <div class="value" id="acct-id" style="font-size:16px">--</div>
+      </div>
+    </div>
+
+    <div class="fa-section">
+      <div class="fa-section-header">Recent Transactions</div>
+      <div id="transactions">
+        <div class="fa-txn"><span class="desc">Loading...</span></div>
+      </div>
+    </div>
+
+    <div class="fa-section">
+      <div class="fa-section-header">Quick Transfer</div>
+      <div class="fa-transfer">
+        <label>Recipient</label>
+        <input type="text" id="transfer-to" placeholder="Enter recipient name or account">
+        <label>Amount</label>
+        <input type="number" id="transfer-amount" placeholder="0.00">
+        <button onclick="doTransfer()">Send Money</button>
+        <div id="transfer-status" style="margin-top:8px;font-size:13px"></div>
+      </div>
+    </div>
+
+    <div class="fa-config-area">
+      <div id="config-display"></div>
+      <div id="config-title"></div>
+    </div>
+  </div>
+
+  <a href="/labs/capstone/hints/hints6.html" class="capstone-hint-btn">&#128161; Need help?</a>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('cap-6', 'xss');
+
+    function doLogin() {
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ username: 'victim', password: 'password123' })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.success) {
+          document.getElementById('login-bar').style.display = 'none';
+          document.getElementById('fa-user').textContent = d.user.username;
+          document.getElementById('welcome-msg').textContent = 'Welcome back, ' + d.user.username;
+          loadAccount();
+        }
+      });
+    }
+
+    function loadAccount() {
+      fetch('/api/finance/account', { credentials: 'include' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.error) return;
+          document.getElementById('balance').textContent = '$' + data.balance.toLocaleString('en-US', {minimumFractionDigits: 2});
+          document.getElementById('monthly').textContent = '+$5,000.00';
+          document.getElementById('acct-id').textContent = data.accountId;
+
+          var txnHtml = '';
+          data.transactions.forEach(function(t) {
+            txnHtml += '<div class="fa-txn"><div><div class="desc">' + (t.from || t.to) + '</div><div class="date">' + t.date + '</div></div><div class="amount ' + t.type + '">' + (t.type === 'credit' ? '+' : '-') + '$' + t.amount.toFixed(2) + '</div></div>';
+          });
+          document.getElementById('transactions').innerHTML = txnHtml;
+        }).catch(function(){});
+    }
+
+    function doTransfer() {
+      var to = document.getElementById('transfer-to').value;
+      var amount = document.getElementById('transfer-amount').value;
+      if (!to || !amount) return;
+
+      // VULNERABLE: No CSRF token on transfer
+      fetch('/api/finance/transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ to: to, amount: parseFloat(amount) })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        document.getElementById('transfer-status').innerHTML = d.success ?
+          '<span style="color:#16a34a">Transfer successful! TXN: ' + d.txnId + '</span>' :
+          '<span style="color:#dc2626">Transfer failed</span>';
+      });
+    }
+
+    // VULNERABLE: Prototype pollution via URL params (deparam-style parser)
+    function parseUrlParams(qs) {
+      var obj = {};
+      if (!qs) return obj;
+      qs.replace(/^\?/, '').split('&').forEach(function(pair) {
+        var parts = pair.split('=');
+        var path = decodeURIComponent(parts[0]);
+        var val = parts[1] ? decodeURIComponent(parts[1]) : '';
+        var keys = path.split(/[\[\]]+/).filter(Boolean);
+        var cur = obj;
+        for (var i = 0; i < keys.length; i++) {
+          if (i === keys.length - 1) cur[keys[i]] = val;
+          else { if (!cur[keys[i]] || typeof cur[keys[i]] !== 'object') cur[keys[i]] = {}; cur = cur[keys[i]]; }
+        }
+      });
+      return obj;
+    }
+
+    // Parse config from URL
+    var urlConfig = parseUrlParams(location.search);
+
+    // VULNERABLE: CSPT — loads config from URL-controlled path
+    var configSection = urlConfig.config || 'general';
+    fetch('/api/settings/' + configSection)
+      .then(function(r) { return r.json(); })
+      .then(function(config) {
+        // Display current config
+        document.getElementById('config-display').textContent = 'Config: ' + (config.section || configSection);
+
+        // VULNERABLE: innerHTML with response title
+        if (config.title) {
+          document.getElementById('config-title').innerHTML = config.title;
+        }
+
+        // VULNERABLE: autoApply from response
+        if (config.autoApply && Array.isArray(config.autoApply)) {
+          config.autoApply.forEach(function(action) {
+            fetch(action.endpoint, {
+              method: action.method || 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify(action.body || {})
+            }).then(function(r) { return r.json(); }).then(function(d) {
+              if (d.success && action.endpoint.includes('transfer')) {
+                solveLab('cap-6');
+              }
+            });
+          });
+        }
+      });
+
+    // PP gadget: check if scriptSrc was polluted
+    var gadgetConfig = {};
+    if (gadgetConfig.scriptSrc) {
+      var s = document.createElement('script');
+      s.src = gadgetConfig.scriptSrc;
+      document.body.appendChild(s);
+    }
+
+    // Auto-check login
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.user) {
+          document.getElementById('login-bar').style.display = 'none';
+          document.getElementById('fa-user').textContent = d.user.username;
+          document.getElementById('welcome-msg').textContent = 'Welcome back, ' + d.user.username;
+          loadAccount();
+        }
+      }).catch(function(){});
+  </script>
+</body>
+</html>

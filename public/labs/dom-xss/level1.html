@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: The innerHTML Trap - DOM XSS Level 1</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">DOM XSS #1: The innerHTML Trap</span>
+      <span class="difficulty easy">Easy</span>
+    </div>
+  </div>
+
+  <div id="solve-banner" class="solve-banner"></div>
+
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Execute <code>alert('XSS')</code> on this page by injecting code through the URL hash fragment.</p>
+        <p style="margin-top:8px;font-size:12px;color:var(--text-muted)">The search page reflects your query from the URL hash into the DOM using innerHTML.</p>
+      </div>
+
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: Where does the input come from?</button>
+        <div class="hint-content">The page reads <code>location.hash</code> (everything after the # in the URL) and uses it as the search query. Try adding <code>#test</code> to the URL.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: What sink is used?</button>
+        <div class="hint-content">The search results are rendered using <code>element.innerHTML = ...</code> which parses HTML. Unlike textContent, innerHTML will execute embedded HTML tags.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Payload</button>
+        <div class="hint-content">Try: <code>#&lt;img src=x onerror=alert('XSS')&gt;</code> — The img tag fails to load, triggering the onerror handler which runs your JavaScript.</div>
+      </div>
+
+      <h3>Vulnerable Code</h3>
+      <div class="source-code">
+<pre><span class="comment">// Source: URL hash fragment</span>
+<span class="keyword">var</span> query = <span class="function">decodeURIComponent</span>(
+  location.hash.<span class="function">substring</span>(1)
+);
+
+<span class="comment">// Sink: innerHTML (dangerous!)</span>
+document.<span class="function">getElementById</span>('results')
+  .<span class="sink">innerHTML</span> =
+    'Results for: <strong>' + query + '</strong>';
+</pre>
+      </div>
+    </div>
+
+    <div class="lab-app">
+      <!-- The vulnerable app -->
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#128269; QuickSearch</h2>
+          <label>Search (type and press Enter, or use the URL hash)</label>
+          <input type="text" id="searchInput" placeholder="Search for anything..." onkeydown="if(event.key==='Enter'){location.hash=encodeURIComponent(this.value)}">
+          <button class="btn btn-primary" onclick="location.hash=encodeURIComponent(document.getElementById('searchInput').value)">Search</button>
+        </div>
+
+        <div class="vuln-output" id="results">
+          <p style="color:var(--text-muted)">Enter a search query above or in the URL hash...</p>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:8px">
+          <p style="font-size:13px;color:var(--text-muted)">
+            <strong>How this works:</strong> The page reads the hash from the URL (everything after #) and displays it as search results. The hash is used directly in innerHTML without sanitization.
+          </p>
+          <p style="font-size:13px;color:var(--text-muted);margin-top:8px">
+            <strong>Real-world context:</strong> Many SPAs use hash-based routing and reflect parameters into the DOM. If innerHTML is used instead of textContent, it creates DOM XSS. This is one of the most common client-side vulnerabilities.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    // Lab verification
+    setupLabVerification('dom-xss-1', 'xss');
+
+    // === VULNERABLE CODE ===
+    function doSearch() {
+      var query = decodeURIComponent(location.hash.substring(1));
+      if (query) {
+        // VULNERABLE: innerHTML with user input from hash
+        document.getElementById('results').innerHTML =
+          'Results for: <strong>' + query + '</strong>' +
+          '<div style="margin-top:12px"><p>No results found for your query.</p></div>';
+        document.getElementById('searchInput').value = query;
+      }
+    }
+
+    window.addEventListener('hashchange', doSearch);
+    doSearch(); // Run on load if hash exists
+  </script>
+</body>
+</html>

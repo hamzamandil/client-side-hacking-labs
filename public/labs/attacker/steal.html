@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Attacker Token Stealer</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body style="background:#1a0a0a;min-height:100vh">
+
+  <div style="max-width:600px;margin:40px auto;padding:24px">
+    <div style="background:rgba(239,68,68,0.1);border:2px solid var(--danger);border-radius:12px;padding:24px;text-align:center">
+      <h2 style="color:var(--danger)">&#9760; Token Stealer</h2>
+      <p style="color:var(--text-secondary);margin-top:8px">This page simulates an attacker's server that captures OAuth tokens/codes from redirects.</p>
+    </div>
+
+    <div style="margin-top:24px">
+      <div class="attacker-console" style="border-color:#8b0000">
+        <div class="title" style="color:#ff4444">Captured Data</div>
+        <div id="captured-data">
+          <div class="log" style="color:var(--text-muted)">Analyzing URL...</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;text-align:center">
+      <a href="/labs/oauth/level1.html?stolen_code=true" class="btn btn-danger" style="text-decoration:none">Return to Lab (mark as solved)</a>
+    </div>
+  </div>
+
+  <script>
+    var captured = document.getElementById('captured-data');
+    var url = window.location.href;
+
+    captured.innerHTML = '<div class="log">Full URL: ' + url + '</div>';
+
+    // Check for code in query params
+    var params = new URLSearchParams(location.search);
+    var code = params.get('code');
+    var state = params.get('state');
+    var error = params.get('error');
+
+    if (code) {
+      captured.innerHTML += '<div class="log" style="color:var(--danger)">STOLEN AUTH CODE: ' + code + '</div>';
+      captured.innerHTML += '<div class="log">State: ' + (state || 'none') + '</div>';
+      captured.innerHTML += '<div class="log" style="color:var(--success)">The authorization code has been captured!</div>';
+      captured.innerHTML += '<div class="log">An attacker would exchange this for an access token.</div>';
+    }
+
+    // Check for token in fragment
+    if (location.hash) {
+      var hashParams = new URLSearchParams(location.hash.substring(1));
+      var token = hashParams.get('access_token') || hashParams.get('id_token');
+      if (token) {
+        captured.innerHTML += '<div class="log" style="color:var(--danger)">STOLEN ACCESS TOKEN: ' + token + '</div>';
+        captured.innerHTML += '<div class="log" style="color:var(--success)">Direct token capture from URL fragment!</div>';
+      } else {
+        captured.innerHTML += '<div class="log">URL fragment: ' + location.hash + '</div>';
+      }
+    }
+
+    if (error) {
+      captured.innerHTML += '<div class="log" style="color:var(--warning)">Error: ' + error + '</div>';
+      captured.innerHTML += '<div class="log">But the token might still be in the URL fragment above!</div>';
+    }
+
+    if (!code && !location.hash && !error) {
+      captured.innerHTML += '<div class="log" style="color:var(--text-muted)">No token or code found in URL.</div>';
+      captured.innerHTML += '<div class="log">Try the OAuth redirect_uri manipulation from the lab page.</div>';
+    }
+
+    // Respond to postMessage requests (act as analytics gadget target)
+    window.addEventListener('message', function(e) {
+      captured.innerHTML += '<div class="log" style="color:var(--warning)">PostMessage from ' + e.origin + ': ' + JSON.stringify(e.data) + '</div>';
+    });
+  </script>
+</body>
+</html>

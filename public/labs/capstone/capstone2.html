@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatConnect - Customer Support</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { background: #f3f4f6; margin: 0; font-family: 'Inter', -apple-system, sans-serif; }
+    .cc-header { background: white; border-bottom: 1px solid #e5e7eb; padding: 14px 32px; display: flex; justify-content: space-between; align-items: center; }
+    .cc-header h1 { font-size: 18px; color: #111827; font-weight: 700; }
+    .cc-header .logo { color: #8b5cf6; }
+    .cc-main { max-width: 900px; margin: 32px auto; padding: 0 24px; }
+    .cc-hero { text-align: center; padding: 48px 0 32px; }
+    .cc-hero h2 { font-size: 28px; color: #111827; margin-bottom: 8px; }
+    .cc-hero p { color: #6b7280; font-size: 16px; }
+    .cc-faq { background: white; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden; margin-bottom: 32px; }
+    .cc-faq-item { padding: 16px 20px; border-bottom: 1px solid #f3f4f6; cursor: pointer; }
+    .cc-faq-item:hover { background: #f9fafb; }
+    .cc-faq-item h3 { font-size: 15px; color: #111827; font-weight: 500; }
+    .cc-faq-item p { font-size: 13px; color: #6b7280; margin-top: 4px; display: none; }
+    .cc-faq-item.open p { display: block; }
+    /* Chat widget in bottom-right */
+    .chat-widget { position: fixed; bottom: 80px; right: 24px; width: 360px; background: white; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); overflow: hidden; z-index: 998; display: none; flex-direction: column; }
+    .chat-widget.open { display: flex; }
+    .chat-header { background: #8b5cf6; color: white; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; }
+    .chat-header h3 { font-size: 14px; font-weight: 600; }
+    .chat-header .status { font-size: 11px; opacity: 0.8; }
+    .chat-header .close-btn { background: none; border: none; color: white; font-size: 18px; cursor: pointer; }
+    .chat-messages { height: 280px; overflow-y: auto; padding: 16px; }
+    .chat-msg { margin-bottom: 12px; max-width: 85%; }
+    .chat-msg.agent { margin-right: auto; }
+    .chat-msg.user { margin-left: auto; }
+    .chat-msg .bubble { padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; }
+    .chat-msg.agent .bubble { background: #f3f4f6; color: #111827; border-bottom-left-radius: 4px; }
+    .chat-msg.user .bubble { background: #8b5cf6; color: white; border-bottom-right-radius: 4px; }
+    .chat-msg .sender { font-size: 11px; color: #9ca3af; margin-bottom: 2px; }
+    .chat-input { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid #e5e7eb; }
+    .chat-input input { flex: 1; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; }
+    .chat-input button { background: #8b5cf6; color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    .chat-toggle { position: fixed; bottom: 80px; right: 24px; width: 56px; height: 56px; background: #8b5cf6; color: white; border: none; border-radius: 50%; font-size: 24px; cursor: pointer; box-shadow: 0 4px 16px rgba(139,92,246,0.4); z-index: 997; }
+  </style>
+</head>
+<body class="capstone-app">
+  <div id="solve-banner" class="capstone-solve-banner"></div>
+
+  <div class="cc-header">
+    <h1><span class="logo">&#9679;</span> ChatConnect Support</h1>
+    <div style="font-size:13px;color:#6b7280">Help Center | Contact | Status</div>
+  </div>
+
+  <div class="cc-main">
+    <div class="cc-hero">
+      <h2>How can we help you?</h2>
+      <p>Browse our FAQ or chat with a support agent</p>
+    </div>
+
+    <div class="cc-faq">
+      <div class="cc-faq-item" onclick="this.classList.toggle('open')">
+        <h3>How do I reset my password?</h3>
+        <p>Go to Settings > Security > Change Password. You'll need your current password to set a new one.</p>
+      </div>
+      <div class="cc-faq-item" onclick="this.classList.toggle('open')">
+        <h3>Can I get a refund?</h3>
+        <p>Refunds are available within 30 days of purchase. Contact support with your order number.</p>
+      </div>
+      <div class="cc-faq-item" onclick="this.classList.toggle('open')">
+        <h3>How do I upgrade my plan?</h3>
+        <p>Visit the Billing page and click "Upgrade". Your new plan takes effect immediately.</p>
+      </div>
+      <div class="cc-faq-item" onclick="this.classList.toggle('open')">
+        <h3>Is my data secure?</h3>
+        <p>We use industry-standard encryption. All data is stored in SOC 2 certified data centers.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chat widget -->
+  <button class="chat-toggle" id="chatToggle" onclick="toggleChat()">&#128172;</button>
+  <div class="chat-widget" id="chatWidget">
+    <div class="chat-header">
+      <div>
+        <h3>Sarah from Support</h3>
+        <div class="status">&#9679; Online</div>
+      </div>
+      <button class="close-btn" onclick="toggleChat()">&times;</button>
+    </div>
+    <div class="chat-messages" id="chatMessages">
+      <div class="chat-msg agent">
+        <div class="sender">Sarah</div>
+        <div class="bubble">Hi! How can I help you today?</div>
+      </div>
+    </div>
+    <div class="chat-input">
+      <input type="text" id="chatInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendChat()">
+      <button onclick="sendChat()">Send</button>
+    </div>
+  </div>
+
+  <a href="/labs/capstone/hints/hints2.html" class="capstone-hint-btn" style="bottom:150px">&#128161; Need help?</a>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('cap-2', 'xss');
+
+    function toggleChat() {
+      var w = document.getElementById('chatWidget');
+      var t = document.getElementById('chatToggle');
+      w.classList.toggle('open');
+      t.style.display = w.classList.contains('open') ? 'none' : 'block';
+    }
+
+    function sendChat() {
+      var input = document.getElementById('chatInput');
+      var msg = input.value.trim();
+      if (!msg) return;
+      input.value = '';
+
+      var messages = document.getElementById('chatMessages');
+      messages.innerHTML += '<div class="chat-msg user"><div class="sender">You</div><div class="bubble">' + msg + '</div></div>';
+      messages.scrollTop = messages.scrollHeight;
+
+      setTimeout(function() {
+        messages.innerHTML += '<div class="chat-msg agent"><div class="sender">Sarah</div><div class="bubble">Thanks for reaching out! Let me look into that for you.</div></div>';
+        messages.scrollTop = messages.scrollHeight;
+      }, 1200);
+    }
+
+    // VULNERABLE: Chat widget listens for postMessage commands
+    // Used by the "internal admin panel" to remotely update the chat widget
+    window.addEventListener('message', function(event) {
+      // Weak origin check: only checks if origin CONTAINS "localhost"
+      if (event.origin.indexOf('localhost') === -1) return;
+
+      var data;
+      try {
+        data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      } catch(e) { return; }
+
+      if (data.action === 'updateWidget') {
+        // Updates the widget welcome message — innerHTML sink
+        document.getElementById('chatMessages').innerHTML += '<div class="chat-msg agent"><div class="sender">System</div><div class="bubble">' + data.message + '</div></div>';
+      }
+      if (data.action === 'setAgentName') {
+        document.querySelector('.chat-header h3').innerHTML = data.name + ' from Support';
+      }
+      if (data.action === 'execCommand') {
+        // Debug command handler for admin — runs string in eval
+        try { eval(data.cmd); } catch(e) {}
+      }
+    });
+
+    // Open chat on load
+    setTimeout(function() { toggleChat(); }, 1500);
+  </script>
+</body>
+</html>

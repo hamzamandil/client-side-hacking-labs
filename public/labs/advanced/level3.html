@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: setTimeout String Execution - Advanced Level 3</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">Advanced #3: setTimeout String Execution</span>
+      <span class="difficulty easy">Easy</span>
+    </div>
+  </div>
+  <div id="solve-banner" class="solve-banner"></div>
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Execute <code>alert('XSS')</code> by injecting code through a <code>setTimeout()</code> call that uses a string argument instead of a function. The delay value comes from a URL parameter.</p>
+      </div>
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: setTimeout with strings</button>
+        <div class="hint-content"><code>setTimeout("code", ms)</code> works like <code>eval("code")</code> — it executes the string as JavaScript after the delay. This is a legacy pattern still found in older codebases.</div>
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: The injection point</button>
+        <div class="hint-content">The page reads <code>?action=</code> from the URL and passes it to <code>setTimeout("performAction('" + action + "')", 1000)</code>. You need to break out of the string context in the setTimeout call.</div>
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Payload</button>
+        <div class="hint-content">Try: <code>?action=');alert('XSS');//</code> — This closes the function call, adds your alert, and comments out the rest. The setTimeout string becomes: <code>performAction('');alert('XSS');//')</code></div>
+      </div>
+      <h3>Vulnerable Code</h3>
+      <div class="source-code">
+<pre><span class="keyword">var</span> action = params.get('action') || 'welcome';
+
+<span class="comment">// VULNERABLE: string-based setTimeout</span>
+<span class="sink">setTimeout</span>(
+  "performAction('" + <span class="sink">action</span> + "')",
+  1000
+);
+
+<span class="comment">// Same pattern with setInterval:</span>
+<span class="comment">// setInterval("refresh('" + id + "')", 5000)</span>
+</pre>
+      </div>
+    </div>
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#9201; Scheduled Actions</h2>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">This page schedules actions via URL parameter. Actions are executed after a 1-second delay.</p>
+          <label>Action (or use ?action= in URL)</label>
+          <input type="text" id="actionInput" placeholder="welcome">
+          <button class="btn btn-primary" onclick="location.search='?action='+encodeURIComponent(document.getElementById('actionInput').value)">Schedule Action</button>
+        </div>
+        <div id="action-log" style="margin-top:16px">
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">Action Log:</h3>
+          <div id="log-output" class="vuln-output" style="min-height:60px">
+            <p style="color:var(--text-muted)">Waiting for scheduled action...</p>
+          </div>
+        </div>
+        <div id="setTimeout-display" style="margin-top:12px;font-family:monospace;font-size:12px;color:var(--text-muted);padding:8px;background:var(--bg-secondary);border-radius:6px"></div>
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px">
+          <p style="font-size:13px;color:var(--text-secondary)"><strong>Real-world context:</strong> <code>setTimeout(string)</code> and <code>setInterval(string)</code> are equivalent to <code>eval()</code>. Modern linters flag this, but legacy code — especially jQuery plugins, ad scripts, and tracking code — still uses string-based timers. Look for this pattern in minified third-party scripts where developers passed user input into timer callbacks.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('adv-3', 'xss');
+
+    function performAction(name) {
+      var output = document.getElementById('log-output');
+      output.innerHTML = '<div style="padding:8px;background:var(--success-light);border-radius:6px;color:var(--success)">Action executed: <strong>' + name + '</strong></div>';
+    }
+
+    var params = new URLSearchParams(location.search);
+    var action = params.get('action') || 'welcome';
+    document.getElementById('actionInput').value = action;
+
+    // Show what setTimeout will execute
+    var code = "performAction('" + action + "')";
+    document.getElementById('setTimeout-display').textContent = 'setTimeout code: ' + code;
+
+    // VULNERABLE: setTimeout with string argument containing user input
+    setTimeout("performAction('" + action + "')", 1000);
+  </script>
+</body>
+</html>

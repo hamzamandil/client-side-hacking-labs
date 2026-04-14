@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WorkHub - Addon Marketplace</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', -apple-system, sans-serif; background: #f1f5f9; color: #1e293b; }
+    .topbar { background: #0f172a; color: #e2e8f0; padding: 0 24px; height: 52px; display: flex; align-items: center; justify-content: space-between; }
+    .topbar .brand { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+    .topbar .brand span { color: #60a5fa; }
+    .topbar .user-info { font-size: 13px; color: #94a3b8; display: flex; align-items: center; gap: 12px; }
+    .topbar .avatar { width: 28px; height: 28px; border-radius: 50%; background: #3b82f6; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 700; }
+    .sidebar { position: fixed; left: 0; top: 52px; bottom: 0; width: 220px; background: #fff; border-right: 1px solid #e2e8f0; padding: 16px 0; }
+    .sidebar a { display: flex; align-items: center; gap: 10px; padding: 10px 20px; font-size: 13px; color: #64748b; text-decoration: none; font-weight: 500; }
+    .sidebar a:hover { background: #f8fafc; color: #1e293b; }
+    .sidebar a.active { background: #eff6ff; color: #2563eb; border-right: 2px solid #2563eb; }
+    .main { margin-left: 220px; padding: 32px; margin-top: 52px; }
+    .page-header { margin-bottom: 28px; }
+    .page-header h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .page-header p { font-size: 14px; color: #64748b; }
+    .addon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+    .addon-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; transition: all 0.2s; }
+    .addon-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.06); border-color: #cbd5e1; }
+    .addon-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .addon-icon { width: 42px; height: 42px; border-radius: 10px; background: #f1f5f9; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+    .addon-name { font-weight: 600; font-size: 15px; }
+    .addon-author { font-size: 12px; color: #94a3b8; }
+    .addon-desc { font-size: 13px; color: #64748b; line-height: 1.5; margin-bottom: 16px; }
+    .addon-actions { display: flex; gap: 8px; }
+    .btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+    .btn-primary { background: #2563eb; color: white; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-installed { background: #dcfce7; color: #16a34a; cursor: default; }
+    .btn-outline { background: white; color: #64748b; border: 1px solid #e2e8f0; }
+    .btn-outline:hover { border-color: #cbd5e1; color: #1e293b; }
+    .toast { position: fixed; bottom: 24px; right: 24px; background: #0f172a; color: #e2e8f0; padding: 14px 20px; border-radius: 10px; font-size: 13px; font-weight: 500; display: none; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 1000; max-width: 380px; }
+    .toast.show { display: flex; align-items: center; gap: 10px; animation: slideUp 0.3s ease; }
+    .toast.error { background: #991b1b; }
+    .toast.success { background: #166534; }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 999; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: white; border-radius: 16px; padding: 32px; max-width: 480px; width: 90%; box-shadow: 0 16px 48px rgba(0,0,0,0.15); }
+    .modal h2 { font-size: 18px; margin-bottom: 12px; }
+    .modal p { font-size: 14px; color: #64748b; margin-bottom: 20px; line-height: 1.6; }
+    .modal .perms { background: #f8fafc; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; }
+    .modal .perms li { font-size: 13px; color: #475569; margin: 4px 0; }
+    .modal .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    #login-gate { position: fixed; inset: 0; background: #0f172a; color: #e2e8f0; display: flex; align-items: center; justify-content: center; z-index: 9999; }
+    #login-gate .login-box { background: #1e293b; padding: 40px; border-radius: 16px; width: 360px; }
+    #login-gate h2 { font-size: 20px; margin-bottom: 20px; text-align: center; }
+    #login-gate input { width: 100%; padding: 10px 14px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; font-size: 14px; margin-bottom: 12px; }
+    #login-gate button { width: 100%; padding: 10px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <!-- Login Gate -->
+  <div id="login-gate">
+    <div class="login-box">
+      <h2>WorkHub Login</h2>
+      <input type="text" id="login-user" placeholder="Username" value="victim">
+      <input type="password" id="login-pass" placeholder="Password" value="password123">
+      <button onclick="doLogin()">Sign In</button>
+      <p style="font-size:12px;color:#64748b;margin-top:12px;text-align:center">Test: victim / password123</p>
+    </div>
+  </div>
+
+  <!-- App -->
+  <div class="topbar">
+    <div class="brand"><span>Work</span>Hub</div>
+    <div class="user-info">
+      <span id="user-display">Loading...</span>
+      <div class="avatar" id="user-avatar">?</div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <a href="#">📋 Dashboard</a>
+    <a href="#">📁 Projects</a>
+    <a href="#">👥 Team</a>
+    <a href="#" class="active">🧩 Addons</a>
+    <a href="#">⚙️ Settings</a>
+  </div>
+
+  <div class="main">
+    <div class="page-header">
+      <h1>Addon Marketplace</h1>
+      <p>Extend your workspace with powerful integrations</p>
+    </div>
+    <div class="addon-grid" id="addon-grid">
+      <div style="color:#94a3b8;font-size:14px">Loading addons...</div>
+    </div>
+  </div>
+
+  <!-- Install Confirmation Modal -->
+  <div class="modal-overlay" id="install-modal">
+    <div class="modal">
+      <h2 id="modal-addon-name">Install Addon</h2>
+      <p id="modal-addon-desc">This addon requires the following permissions:</p>
+      <div class="perms">
+        <ul>
+          <li>Read workspace member list</li>
+          <li>Access workspace configuration</li>
+          <li>View project data</li>
+        </ul>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" id="modal-install-btn" onclick="confirmInstall()">Connect &amp; Install</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    // Lab verification
+    setupLabVerification('rw-window-hijack', 'xss');
+
+    var currentAddonId = null;
+
+    function doLogin() {
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        credentials: 'include',
+        body: JSON.stringify({
+          username: document.getElementById('login-user').value,
+          password: document.getElementById('login-pass').value
+        })
+      }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.success) {
+          document.getElementById('login-gate').classList.add('hidden');
+          document.getElementById('user-display').textContent = data.user.username;
+          document.getElementById('user-avatar').textContent = data.user.username[0].toUpperCase();
+          loadAddons();
+        }
+      });
+    }
+
+    function loadAddons() {
+      fetch('/api/addons', { credentials: 'include' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var grid = document.getElementById('addon-grid');
+          grid.innerHTML = '';
+          data.addons.forEach(function(addon) {
+            var card = document.createElement('div');
+            card.className = 'addon-card';
+            card.innerHTML =
+              '<div class="addon-top">' +
+                '<div class="addon-icon">' + addon.icon + '</div>' +
+                '<div><div class="addon-name">' + addon.name + '</div>' +
+                '<div class="addon-author">by ' + addon.author + '</div></div>' +
+              '</div>' +
+              '<div class="addon-desc">' + addon.description + '</div>' +
+              '<div class="addon-actions">' +
+                (addon.installed
+                  ? '<button class="btn btn-installed">Installed ✓</button>'
+                  : '<button class="btn btn-primary" onclick="startInstall(\'' + addon.id + '\',\'' + addon.name + '\')">Connect</button>') +
+                '<button class="btn btn-outline">Details</button>' +
+              '</div>';
+            grid.appendChild(card);
+          });
+        });
+    }
+
+    function startInstall(addonId, addonName) {
+      currentAddonId = addonId;
+      document.getElementById('modal-addon-name').textContent = 'Install ' + addonName;
+      document.getElementById('install-modal').classList.add('show');
+    }
+
+    function closeModal() {
+      document.getElementById('install-modal').classList.remove('show');
+      currentAddonId = null;
+    }
+
+    function confirmInstall() {
+      closeModal();
+      if (!currentAddonId) return;
+
+      // Fetch the OAuth URL for this addon
+      fetch('/api/addons/' + currentAddonId + '/install', { credentials: 'include' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          // VULNERABLE: Static, predictable window.open target name
+          // An attacker can pre-register an iframe with this name
+          // and the OAuth flow will load inside their iframe instead
+          var oauthPopup = window.open(
+            data.oauthUrl,
+            'workhub-addon-oauth',  // <-- PREDICTABLE target name!
+            'menubar=no,toolbar=no,status=no,width=640,height=580,left=200,top=100'
+          );
+        });
+    }
+
+    // Listen for OAuth completion via postMessage
+    window.addEventListener('message', function(event) {
+      // VULNERABLE: Only checks origin, but doesn't verify event.source is the popup we opened
+      // An attacker's iframe with the same name receives the OAuth flow
+      if (event.data && event.data.type === 'addon-oauth-complete') {
+        showToast('success', event.data.addonId + ' connected! Token: ' + event.data.token.substring(0,8) + '...');
+
+        // Fetch workspace data that the addon now has access to
+        fetch('/api/addons/workspace-data', { credentials: 'include' })
+          .then(function(r) { return r.json(); })
+          .then(function(wsData) {
+            showToast('success', 'Addon linked to workspace: ' + wsData.workspace + ' (' + wsData.members.length + ' members)');
+          });
+
+        loadAddons();
+      }
+    });
+
+    function showToast(type, msg) {
+      var toast = document.getElementById('toast');
+      toast.className = 'toast show ' + type;
+      toast.textContent = msg;
+      setTimeout(function() { toast.className = 'toast'; }, 5000);
+    }
+
+    // Auto-check if already logged in
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.user) {
+          document.getElementById('login-gate').classList.add('hidden');
+          document.getElementById('user-display').textContent = data.user.username;
+          document.getElementById('user-avatar').textContent = data.user.username[0].toUpperCase();
+          loadAddons();
+        }
+      }).catch(function(){});
+  </script>
+</body>
+</html>

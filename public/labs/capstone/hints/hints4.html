@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hints - SecureAuth</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="hints-page">
+  <div class="hints-header">
+    <a href="/labs/capstone/capstone4.html" style="font-size:14px">&larr; Back to SecureAuth</a>
+    <span style="font-size:14px;color:var(--text-muted)">Capstone #4 Hints</span>
+  </div>
+  <div class="hints-body">
+    <h2 style="margin-bottom:4px">SecureAuth - Hints</h2>
+    <p style="color:var(--text-muted);font-size:14px;margin-bottom:24px">Only reveal what you need. Try to solve it yourself first.</p>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 1: Study the OAuth flow</button>
+    <div class="hint-content">Click "Sign in with SSO" and watch the URL. The app redirects to <code>/oauth/authorize</code> with several parameters: <code>client_id</code>, <code>response_type</code>, <code>redirect_uri</code>, and <code>state</code>. After authenticating, you're redirected back with a <code>code</code>. What if you could control where the code is sent?</div>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 2: The redirect_uri</button>
+    <div class="hint-content">The OAuth provider validates <code>redirect_uri</code> using a prefix check — it only verifies that the URI starts with a registered callback URL. This means you can append path traversal sequences to redirect the authorization response to a different page on the same origin.</div>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 3: The open redirect</button>
+    <div class="hint-content">The server has an open redirect at <code>/redirect?url=...</code>. You can chain this: use path traversal in the redirect_uri to reach the open redirect, which then sends the code to an attacker-controlled page. Also try changing <code>response_type</code> to <code>token</code> to get the access token directly in the URL fragment.</div>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 4: Token in the fragment</button>
+    <div class="hint-content">With <code>response_type=token</code>, the OAuth provider puts the access token in the URL fragment (after #). This fragment is accessible via JavaScript but not sent to the server. If you redirect the user to a page you control, your JavaScript can read the fragment and steal the token.</div>
+
+    <button class="hint-btn" onclick="toggleHint(this)">Hint 5: Near-solution</button>
+    <div class="hint-content">Craft this URL: <code>/oauth/authorize?client_id=vuln-app&response_type=token&state=evil&redirect_uri=http://localhost:3000/oauth/callback/../../../labs/attacker/steal.html</code>. After authentication, the token lands on the steal page in the URL fragment. The steal page reads it and can use it to call <code>/oauth/userinfo</code>.</div>
+  </div>
+  <script src="/js/app.js"></script>
+</body>
+</html>
