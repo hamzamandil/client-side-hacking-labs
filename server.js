@@ -823,6 +823,72 @@ app.get('/api/dashboard/search-users', requireAuth, (req, res) => {
   res.json({ query: q, results, total: results.length });
 });
 
+// ============================================================
+// LAB: Cookie-scoped DOM XSS with signup endpoint bypass
+// (Inspired by elmahdi4's writeup)
+// ============================================================
+
+// The /login endpoint OVERWRITES the lang cookie server-side to "en" — this is the "fix"
+app.get('/elmahdi/login', (req, res) => {
+  // Server-side defense: overwrite lang cookie to prevent XSS via malicious cookie value
+  res.setHeader('Set-Cookie', 'lang=en; Path=/; Max-Age=86400');
+  res.sendFile(path.join(__dirname, 'public', 'labs', 'elmahdi', 'login.html'));
+});
+
+// The /signup endpoint is VULNERABLE — same page logic, but no Set-Cookie to overwrite
+app.get('/elmahdi/signup', (req, res) => {
+  // VULNERABLE: No Set-Cookie overwrite here (developer forgot)
+  res.sendFile(path.join(__dirname, 'public', 'labs', 'elmahdi', 'signup.html'));
+});
+
+// Simulated OAuth token endpoint (the prize for successful XSS)
+app.get('/elmahdi/oauth/token', (req, res) => {
+  res.json({
+    access_token: 'oauth_' + crypto.randomBytes(16).toString('hex'),
+    refresh_token: 'refresh_' + crypto.randomBytes(16).toString('hex'),
+    expires_in: 3600,
+    scope: 'read write admin'
+  });
+});
+
+// ============================================================
+// LAB: JSON Injection via querystring reflection
+// (Inspired by elmahdi4's writeup - pattern 3)
+// ============================================================
+
+// Config endpoint reflects ?v= param into a JSON response WITHOUT encoding
+app.get('/elmahdi/api/config', (req, res) => {
+  const v = req.query.v || '1.0';
+  // VULNERABLE: v is inserted raw into the JSON string, enabling structure breakout
+  // A safe implementation would use res.json({ ... }) with v as a value
+  const rawJson = `{
+  "version": "${v}",
+  "features": {
+    "darkMode": true,
+    "beta": false
+  },
+  "api": {
+    "baseUrl": "/api/v2",
+    "timeout": 30000
+  }
+}`;
+  res.setHeader('Content-Type', 'application/json');
+  res.send(rawJson);
+});
+
+app.get('/elmahdi/app', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'labs', 'elmahdi', 'app.html'));
+});
+
+// ============================================================
+// LAB: Chrome innerHTML quirk (postMessage JSON parsing)
+// (Inspired by elmahdi4's writeup - pattern 2)
+// ============================================================
+
+app.get('/elmahdi/checkout', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'labs', 'elmahdi', 'checkout.html'));
+});
+
 // Catch-all for lab pages
 app.get('/labs/*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', req.path));

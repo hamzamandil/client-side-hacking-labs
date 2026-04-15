@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PayFlow - Checkout</title>
+  <link rel="stylesheet" href="/labs/elmahdi/hint-panel.css">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Inter',-apple-system,sans-serif;background:#f8fafc;color:#0f172a;min-height:100vh}
+    .topbar{background:#fff;border-bottom:1px solid #e2e8f0;height:60px;display:flex;align-items:center;padding:0 32px;justify-content:space-between}
+    .brand{font-weight:800;font-size:18px;color:#059669}
+    .brand em{font-style:normal;color:#0f172a}
+    .secure{display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;background:#f0fdf4;padding:5px 12px;border-radius:20px}
+    .container{max-width:1100px;margin:0 auto;padding:32px 24px;display:grid;grid-template-columns:1fr 380px;gap:24px}
+    h1{font-size:22px;font-weight:700;margin-bottom:4px}
+    .page-desc{font-size:14px;color:#64748b;margin-bottom:24px}
+    .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:24px;margin-bottom:16px}
+    .card h3{font-size:15px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+    .card-step-num{width:22px;height:22px;border-radius:50%;background:#059669;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:700}
+    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+    .form-group{margin-bottom:12px}
+    .form-group label{display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px}
+    .form-group input,.form-group select{width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;background:#fff}
+    .form-group input:focus,.form-group select:focus{outline:none;border-color:#059669;box-shadow:0 0 0 3px rgba(5,150,105,0.1)}
+    .payment-methods{display:flex;gap:8px;margin-bottom:16px}
+    .payment-btn{flex:1;padding:10px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#64748b;display:flex;align-items:center;justify-content:center;gap:6px}
+    .payment-btn.active{border-color:#059669;background:#f0fdf4;color:#059669}
+    .summary{position:sticky;top:84px}
+    .summary h3{font-size:15px;font-weight:700;margin-bottom:16px}
+    .summary-item{display:flex;justify-content:space-between;padding:8px 0;font-size:13px;color:#475569}
+    .summary-item.total{border-top:1px solid #e2e8f0;padding-top:12px;margin-top:8px;font-weight:700;color:#0f172a;font-size:15px}
+    .product{display:flex;gap:12px;margin-bottom:16px}
+    .product-img{width:56px;height:56px;background:#f1f5f9;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+    .product-name{font-size:14px;font-weight:600}
+    .product-variant{font-size:12px;color:#94a3b8}
+    .btn-pay{width:100%;padding:12px;background:#059669;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer}
+    .btn-pay:hover{background:#047857}
+    .wallet-embed{border:1px dashed #e2e8f0;border-radius:8px;padding:16px;background:#f8fafc;font-size:12px;color:#94a3b8;text-align:center;min-height:100px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px}
+    .status{font-size:12px;color:#94a3b8;margin-top:8px;padding:8px 12px;background:#f8fafc;border-radius:6px;font-family:monospace}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><em>Pay</em>Flow</div>
+    <div class="secure">🔒 Secure checkout</div>
+  </div>
+
+  <div class="container">
+    <div>
+      <h1>Checkout</h1>
+      <p class="page-desc">Complete your purchase securely</p>
+
+      <div class="card">
+        <h3><span class="card-step-num">1</span>Billing Information</h3>
+        <div class="form-row">
+          <div class="form-group"><label>First name</label><input type="text" value="Jane"></div>
+          <div class="form-group"><label>Last name</label><input type="text" value="Doe"></div>
+        </div>
+        <div class="form-group"><label>Email</label><input type="email" value="jane@acme.com"></div>
+        <div class="form-group"><label>Address</label><input type="text" value="123 Main Street"></div>
+        <div class="form-row">
+          <div class="form-group"><label>City</label><input type="text" value="San Francisco"></div>
+          <div class="form-group"><label>ZIP</label><input type="text" value="94102"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><span class="card-step-num">2</span>Payment Method</h3>
+        <div class="payment-methods">
+          <button class="payment-btn active">💳 Card</button>
+          <button class="payment-btn">👛 Wallet</button>
+          <button class="payment-btn">🏦 Bank</button>
+        </div>
+
+        <div class="wallet-embed">
+          <div>External wallet communication iframe</div>
+          <div style="font-size:10px;font-family:monospace;color:#cbd5e1">Listening for postMessage from wallet providers...</div>
+        </div>
+        <div class="status" id="pm-status">Waiting for wallet events...</div>
+      </div>
+
+      <button class="btn-pay">Place Order · $127.50</button>
+    </div>
+
+    <div class="summary">
+      <div class="card">
+        <h3>Order Summary</h3>
+        <div class="product">
+          <div class="product-img">⌨️</div>
+          <div>
+            <div class="product-name">Mechanical Keyboard Pro</div>
+            <div class="product-variant">RGB · Blue switches</div>
+          </div>
+        </div>
+        <div class="product">
+          <div class="product-img">🖱️</div>
+          <div>
+            <div class="product-name">Ergonomic Mouse</div>
+            <div class="product-variant">Wireless</div>
+          </div>
+        </div>
+        <div class="summary-item"><span>Subtotal</span><span>$118.00</span></div>
+        <div class="summary-item"><span>Shipping</span><span>$4.50</span></div>
+        <div class="summary-item"><span>Tax</span><span>$5.00</span></div>
+        <div class="summary-item total"><span>Total</span><span>$127.50</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VULNERABLE CODE: postMessage handler with Chrome innerHTML quirk -->
+  <script>
+    /**
+     * Wallet bridge - receives payment events from external wallet providers
+     * Parses the message body as JSON, but handles HTML-encoded quotes from
+     * older wallets by doing an "HTML decode via detached element" dance.
+     *
+     * The developer assumed this was safe because the &lt;p&gt; element never
+     * enters the DOM tree. But Chrome still fires onerror for img tags
+     * inside innerHTML, even on detached elements.
+     */
+    window.addEventListener('message', function(event) {
+      // Note: no origin check - attacker can iframe and send messages
+      if (!event.data || typeof event.data !== 'string') return;
+
+      const statusEl = document.getElementById('pm-status');
+
+      try {
+        let jsonStr = event.data;
+        statusEl.textContent = '> Received: ' + jsonStr.substring(0, 80);
+
+        // Some legacy wallets HTML-encode their JSON (escaped quotes).
+        // If we detect &quot;, we decode it via a detached element.
+        if (jsonStr.indexOf('&quot;') !== -1) {
+          statusEl.textContent = '> HTML-encoded message detected, decoding...';
+
+          // "Safe" HTML decode - element never attached to the DOM
+          // But Chrome fires onerror on detached innerHTML img tags anyway!
+          const p = document.createElement('p');
+          p.innerHTML = jsonStr;  // SINK: quirk triggers here
+          jsonStr = p.innerText;
+        }
+
+        const payload = JSON.parse(jsonStr);
+        if (payload.body) {
+          statusEl.textContent = '> Processed: ' + JSON.stringify(payload.body).substring(0, 80);
+        }
+      } catch (e) {
+        statusEl.textContent = '> Parse error: ' + e.message;
+      }
+    });
+
+    // Also accept a URL-based test harness for debugging
+    // Try sending a message via a test page, or craft your own
+  </script>
+
+  <!-- Hint panel -->
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: Chrome innerHTML Quirk</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">The page accepts postMessage events and "safely" decodes HTML-encoded JSON using a <strong>detached</strong> &lt;p&gt; element. The dev assumed detached elements can't execute scripts. Chrome says otherwise.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">1</div>
+          <span>Find the message handler</span>
+          <span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          View source or open DevTools. There's a <code>window.addEventListener('message', ...)</code> that processes string data as JSON. It has no origin check.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">2</div>
+          <span>Understand the "safe" path</span>
+          <span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          If the message contains <code>&amp;quot;</code>, the handler creates a <strong>detached</strong> <code>&lt;p&gt;</code> element, sets <code>p.innerHTML = message</code>, then reads <code>p.innerText</code>. The element is never appended to the DOM. Seems safe, right?
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">3</div>
+          <span>The Chrome quirk</span>
+          <span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          When you assign <code>innerHTML</code> that contains an <code>&lt;img&gt;</code> tag, Chrome immediately tries to load the <code>src</code> attribute &mdash; <strong>even if the element isn't attached to the DOM</strong>. If the src fails to load, <code>onerror</code> fires.
+          <pre><code>const p = document.createElement('p');
+p.innerHTML = '&lt;img src=x onerror=alert(1)&gt;';
+// In Chrome, alert(1) fires even though p is never appended!</code></pre>
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">4</div>
+          <span>Trigger the decoder path</span>
+          <span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          To reach the detached element code path, your payload needs to contain <code>&amp;quot;</code>. So prefix your img tag with that string. The actual message is processed as a string, so any content works &mdash; JSON parsing can fail after the XSS fires.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">5</div>
+          <span>Deliver the payload</span>
+          <span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Either: (a) open this page then run <code>window.postMessage(...)</code> in its own console, or (b) set up an attacker page that frames this one and posts the message. For testing, the console method is fastest.
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">
+          🚩 Full Solution (spoiler)
+        </button>
+        <div class="hint-spoiler-content">
+          <p>In this page's DevTools console:</p>
+          <pre>window.postMessage(
+  '&amp;quot;&lt;img src=x onerror=alert("XSS_QUIRK")&gt;',
+  '*'
+);</pre>
+          <p>The handler sees <code>&amp;quot;</code>, takes the "safe" decoder path, sets innerHTML on a detached <code>&lt;p&gt;</code>, and Chrome fires the img's onerror anyway.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('elmahdi-chrome-quirk', 'xss');
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
+  </script>
+</body>
+</html>
