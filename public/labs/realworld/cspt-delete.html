@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SecureVault - Security Settings</title>
+  <link rel="stylesheet" href="/css/hint-panel.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Inter', -apple-system, sans-serif; background: #f8fafc; color: #0f172a; }
@@ -259,6 +260,72 @@
           loadSessions();
         }
       }).catch(function(){});
+
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
   </script>
+
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: SecureVault CSPT in DELETE</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">The session revoke flow builds a DELETE fetch URL from a parameter you control. Traverse the path to hit a different endpoint the server never intended to expose from here.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">1</div><span>Find the DELETE sink</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          View source. Look at <code>executeRevoke</code> &mdash; it calls <code>fetch('/api/sessions/' + pendingSessionId, {method: 'DELETE', ...})</code>. The sessionId flows directly into the path.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">2</div><span>Find how sessionId is set</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>promptRevoke</code> gets called with the session ID from the server. BUT it also checks <code>URLSearchParams(window.location.search).get('session')</code> and overrides the ID if present. That's your injection point.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">3</div><span>Pick a target endpoint</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Check the server. There's a special handler: if the path contains "profile", it simulates account deletion with a flag. Traverse from <code>/api/sessions/</code> back up to <code>/api/users/profile</code> &mdash; two levels: <code>../../users/profile</code>.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">4</div><span>Craft the malicious URL</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Append <code>?session=../../users/profile</code> to the page URL. When the user clicks "Revoke" on any session, the URL param overrides the real session ID with your traversal payload.
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">🚩 Full Solution</button>
+        <div class="hint-spoiler-content">
+          <p>1. Navigate to the crafted URL (this is the link you'd send the victim):</p>
+          <pre>/labs/realworld/cspt-delete.html?session=../../users/profile</pre>
+          <p>2. Click "Revoke" on any session.</p>
+          <p>3. Click "Revoke" in the confirmation dialog.</p>
+          <p>The fetch sends <code>DELETE /api/sessions/../../users/profile</code> which the server/express path resolves to <code>DELETE /api/profile</code> style — or more accurately, the server-side handler matches the path containing "profile" and returns the account-deleted flag.</p>
+          <p>Or try transfer:</p>
+          <pre>?session=../../transfer</pre>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

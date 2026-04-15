@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BuzzBoard - Social Feed</title>
+  <link rel="stylesheet" href="/css/hint-panel.css">
   <style>
     *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#f8fafc;color:#0f172a}
     .bb-topbar{background:#fff;border-bottom:1px solid #e2e8f0;height:52px;display:flex;align-items:center;padding:0 24px;justify-content:space-between}.bb-topbar .brand{font-weight:800;font-size:16px;color:#f97316}.bb-topbar .nav{display:flex;gap:18px;font-size:13px}.bb-topbar .nav a{color:#64748b;text-decoration:none;font-weight:500;padding:4px 0}.bb-topbar .nav a.active{color:#f97316;border-bottom:2px solid #f97316}.bb-topbar .actions{display:flex;align-items:center;gap:10px}.bb-topbar .notif{width:32px;height:32px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer;position:relative}.bb-topbar .notif .dot{position:absolute;top:4px;right:4px;width:6px;height:6px;border-radius:50%;background:#ef4444}.bb-topbar .me{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
@@ -68,7 +69,80 @@
     Source is in the URL hash parameters.
   -->
   <script src="/js/apps/social-feed.js"></script>
+
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: BuzzBoard (insertAdjacentHTML)</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">The app has a <code>sanitize()</code> function. It's used in most render paths &mdash; but not all. Find a path where hash params reach a DOM API without sanitization.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">1</div><span>Find the source</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Open <code>social-feed.js</code>. Look at <code>handleDeepLinks()</code>. It parses URL query AND hash fragments. Key hash params: <code>bio</code>, <code>announcement</code>.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">2</div><span>Trace each hash param to its sink</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>announcement</code> goes to <code>showAnnouncement</code> which uses <code>textContent</code> &mdash; SAFE. <code>bio</code> goes to <code>updateBio</code> which uses <code>insertAdjacentHTML</code> and <code>innerHTML</code> directly &mdash; NOT SAFE.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">3</div><span>The two branches in updateBio</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <pre><code>updateBio: function(bio) {
+  var bioEl = this.profileContainer.querySelector('.bb-profile-bio');
+  if (bioEl) {
+    bioEl.insertAdjacentHTML('beforeend', '...'+bio+'...');
+  } else {
+    tempDiv.innerHTML = '...'+bio+'...';
+    this.profileContainer.appendChild(tempDiv);
+  }
+}</code></pre>
+          Both paths are sinks. The "else" path fires when the profile hasn't loaded yet.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">4</div><span>Trigger the right path</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          If you provide <code>?profile=victim</code>, a profile is rendered and <code>.bb-profile-bio</code> exists &mdash; the <code>insertAdjacentHTML</code> path fires. If you skip <code>profile</code>, the else branch fires. Both exploit the same bio payload.
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">🚩 Full Solution</button>
+        <div class="hint-spoiler-content">
+          <p>URL payload:</p>
+          <pre>/labs/xss-hunt/hunt3-insertadjacenthtml.html?profile=victim#bio=&lt;img src=x onerror=alert(1)&gt;</pre>
+          <p>Flow: profile loads → <code>.bb-profile-bio</code> exists → <code>updateBioFromHash</code> reads <code>#bio=</code> → <code>insertAdjacentHTML('beforeend', ...bio...)</code> with raw HTML → img onerror fires.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/app.js"></script>
-  <script>setupLabVerification('xss-hunt-3', 'xss');</script>
+  <script>
+    setupLabVerification('xss-hunt-3', 'xss');
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
+  </script>
 </body>
 </html>

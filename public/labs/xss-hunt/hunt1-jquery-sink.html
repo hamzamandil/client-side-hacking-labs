@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TicketFlow - Support Dashboard</title>
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <link rel="stylesheet" href="/css/hint-panel.css">
   <style>
     *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#f8fafc;color:#1e293b}.topbar{background:#fff;border-bottom:1px solid #e2e8f0;height:52px;display:flex;align-items:center;padding:0 24px;justify-content:space-between}.topbar .brand{font-weight:800;font-size:16px;color:#6366f1}.topbar .nav{display:flex;gap:20px;font-size:13px}.topbar .nav a{color:#64748b;text-decoration:none;font-weight:500}.topbar .nav a.active{color:#6366f1}.topbar .user{display:flex;align-items:center;gap:8px;font-size:13px;color:#64748b}.topbar .avatar{width:28px;height:28px;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
     .container{max-width:960px;margin:0 auto;padding:32px 24px}.page-header{margin-bottom:24px}.page-header h1{font-size:22px;font-weight:700;margin-bottom:4px}.page-header p{font-size:14px;color:#64748b}
@@ -59,7 +60,117 @@
 
   <!-- The vulnerable code is in this external JS file - go read it -->
   <script src="/js/apps/ticket-app.js"></script>
+
+  <!-- Hidden hint panel -->
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: TicketFlow jQuery Sink</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">The search code has TWO rendering paths. One uses an escape helper, the other doesn't. Your job: pick the unsafe path and control what flows into it.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">1</div>
+          <span>Find the source</span>
+          <span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Open <code>/js/apps/ticket-app.js</code> in DevTools (Sources tab) or view it directly. Search for where the query comes from &mdash; <code>TicketFlow.getQueryParam</code>. The query is read from the URL <code>?q=</code> parameter on page load and also reflects on hash fragments. The init function auto-runs a search if <code>?q=</code> is present.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">2</div>
+          <span>Trace the query into render</span>
+          <span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          The search calls <code>fetch('/api/search?q=...')</code>, then hands the response plus the original query to <code>renderResults(data, query)</code>. Read <code>renderResults</code> carefully &mdash; the query appears in TWO places.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">3</div>
+          <span>Compare the two paths</span>
+          <span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          When results exist, the code uses <code>TicketFlow.escapeText(query)</code> &mdash; safe.
+          When results are empty, the code uses <code>$(container).html(...query...)</code> directly &mdash; no escaping. That's your sink.
+          <pre><code>if (!data.results || data.results.length === 0) {
+  $(container).html(
+    '...No results matching "&lt;strong&gt;' + query + '&lt;/strong&gt;"...'
+  );
+  return;
+}</code></pre>
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">4</div>
+          <span>How to reach the empty path</span>
+          <span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          The backend returns results when the query matches. Use a query that matches nothing real &mdash; e.g. <code>zzzpayload</code>. Then append your HTML payload. The whole string goes through <code>.html()</code>.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">5</div>
+          <span>jQuery .html() quirks</span>
+          <span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          jQuery's <code>.html()</code> strips <code>&lt;script&gt;</code> tags but executes event handlers on other elements. Use <code>&lt;img src=x onerror=...&gt;</code> or <code>&lt;svg onload=...&gt;</code>. The img fails to load → onerror fires.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">6</div>
+          <span>Deliver the payload</span>
+          <span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Put the payload directly in the URL: <code>?q=ZZZ&lt;img src=x onerror=alert(1)&gt;</code>. The init function reads the URL, calls execute, hits the backend (no results because "ZZZ..." doesn't match), falls into the empty path, and <code>.html()</code> renders your img tag.
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">
+          🚩 Full Solution (spoiler)
+        </button>
+        <div class="hint-spoiler-content">
+          <p>Navigate to:</p>
+          <pre>/labs/xss-hunt/hunt1-jquery-sink.html?q=zzznoresults&lt;img src=x onerror=alert('XSS')&gt;</pre>
+          <p>Flow:</p>
+          <p>1. <code>Search.init()</code> reads <code>?q=</code> from URL</p>
+          <p>2. Sets the search input value and calls <code>execute(query)</code></p>
+          <p>3. Fetches <code>/api/search</code> — no tickets match "zzznoresults…" so results is empty</p>
+          <p>4. Empty path in <code>renderResults</code> runs <code>$(container).html('...' + query + '...')</code></p>
+          <p>5. jQuery parses the HTML, creates the <code>&lt;img&gt;</code>, browser tries to load src=x, fails, fires onerror → alert</p>
+          <p><strong>Why the safe path is safe:</strong> the code uses <code>TicketFlow.escapeText(query)</code> there. The developer remembered the "success" path but forgot the "empty" path.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/app.js"></script>
-  <script>setupLabVerification('xss-hunt-1', 'xss');</script>
+  <script>
+    setupLabVerification('xss-hunt-1', 'xss');
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
+  </script>
 </body>
 </html>

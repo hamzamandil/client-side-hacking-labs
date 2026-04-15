@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CloudDocs - Document Management</title>
+  <link rel="stylesheet" href="/css/hint-panel.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Inter', -apple-system, sans-serif; background: #f9fafb; color: #111827; }
@@ -239,6 +240,89 @@
           document.getElementById('nav-avatar').textContent = d.user.username[0].toUpperCase();
         }
       }).catch(function(){});
+
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
   </script>
+
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: CloudDocs postMessage Iframe XSS</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">The page builds iframes from postMessage data using string concatenation. No origin check, no sanitization. Break out of an attribute.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">1</div><span>Find the listener</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          View source. Find <code>window.addEventListener('message', ...)</code>. The handler checks if <code>event.data.message === 'e:openFloatingPage'</code> but does NOT check origin.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">2</div><span>Spot the sink</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          The handler builds an HTML string with string concatenation:
+          <pre><code>'&lt;iframe src="' + d.url + '" name="' + d.name + '" id="fpf-' + d.id + '" ...&gt;'</code></pre>
+          Then does <code>container.insertAdjacentHTML("beforeend", panelHtml)</code>. Three injection points: <code>url</code>, <code>name</code>, <code>id</code>.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">3</div><span>Attribute breakout</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          To escape the <code>src="..."</code> attribute, inject a <code>"</code> followed by an event handler. The iframe needs to actually load for <code>onload</code> to fire, so use a URL that returns something (even 404 is fine).
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">4</div><span>X-Frame-Options</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Many URLs are framed &mdash; the server's <code>/api/download</code> endpoint has no X-Frame-Options. Use it as the iframe src. Or <code>about:blank</code> works too for breakout-only payloads.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">5</div><span>Send the message</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Open this page, then in its own DevTools console run <code>postMessage(...)</code>. Or build an attacker page that iframes this one and posts.
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">🚩 Full Solution</button>
+        <div class="hint-spoiler-content">
+          <p>In this page's DevTools console:</p>
+          <pre>postMessage({
+  message: 'e:openFloatingPage',
+  data: {
+    id: 'pwn',
+    name: 'pwn',
+    url: '/api/download?p=x" onload="alert(\'XSS\')'
+  }
+}, '*');</pre>
+          <p>Resulting HTML:</p>
+          <pre>&lt;iframe src="/api/download?p=x" onload="alert('XSS')"
+   name="pwn" id="fpf-pwn" ...&gt;&lt;/iframe&gt;</pre>
+          <p>Iframe loads /api/download, onload fires, alert pops.</p>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

