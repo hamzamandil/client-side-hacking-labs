@@ -824,6 +824,45 @@ app.get('/api/dashboard/search-users', requireAuth, (req, res) => {
 });
 
 // ============================================================
+// LAB: TicketFlow - actual ticket search with filtering
+// (Used by /labs/xss-hunt/hunt1-jquery-sink.html)
+// ============================================================
+const supportTickets = [
+  { id: 'TKT-1042', title: 'Unable to login after password reset', assignee: 'sarah.chen', status: 'open', priority: 'high' },
+  { id: 'TKT-1043', title: 'Billing page shows incorrect invoice', assignee: 'mike.torres', status: 'pending', priority: 'medium' },
+  { id: 'TKT-1044', title: 'API rate limit exceeded on free tier', assignee: 'emma.wilson', status: 'open', priority: 'low' },
+  { id: 'TKT-1045', title: 'Dashboard not loading on Safari mobile', assignee: 'alex.kim', status: 'escalated', priority: 'critical' },
+  { id: 'TKT-1046', title: 'SSO integration failing with Okta', assignee: 'sarah.chen', status: 'open', priority: 'high' },
+  { id: 'TKT-1047', title: 'Export to CSV includes wrong timezone', assignee: 'mike.torres', status: 'closed', priority: 'low' },
+  { id: 'TKT-1048', title: 'Webhook deliveries failing intermittently', assignee: 'emma.wilson', status: 'open', priority: 'medium' },
+  { id: 'TKT-1049', title: 'Two-factor authentication code not received', assignee: 'alex.kim', status: 'pending', priority: 'high' },
+  { id: 'TKT-1050', title: 'Subscription cancellation button missing', assignee: 'sarah.chen', status: 'open', priority: 'medium' },
+];
+
+app.get('/api/tickets/search', (req, res) => {
+  const q = (req.query.q || '').toLowerCase();
+  if (!q) return res.json({ query: req.query.q || '', results: [] });
+
+  // Actually filter - returns empty if nothing matches
+  const matches = supportTickets.filter(t =>
+    t.id.toLowerCase().includes(q) ||
+    t.title.toLowerCase().includes(q) ||
+    t.assignee.toLowerCase().includes(q) ||
+    t.status.toLowerCase().includes(q) ||
+    t.priority.toLowerCase().includes(q)
+  );
+
+  res.json({
+    query: req.query.q || '',
+    results: matches.map(t => ({
+      title: t.id + ': ' + t.title,
+      url: '/tickets/' + t.id,
+      meta: t.assignee + ' · ' + t.priority + ' · ' + t.status
+    }))
+  });
+});
+
+// ============================================================
 // LAB: Cookie-scoped DOM XSS with signup endpoint bypass
 // (Inspired by elmahdi4's writeup)
 // ============================================================

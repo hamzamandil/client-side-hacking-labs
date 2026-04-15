@@ -11,7 +11,7 @@
 
   // Configuration
   TicketFlow.config = {
-    apiBase: '/api/search',
+    apiBase: '/api/tickets/search',
     maxResults: 20,
     debounceMs: 300,
     highlightClass: 'tf-highlight'
