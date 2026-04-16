@@ -928,6 +928,96 @@ app.get('/elmahdi/checkout', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'labs', 'elmahdi', 'checkout.html'));
 });
 
+// ============================================================
+// LAB: Advanced PostMessage Labs
+// ============================================================
+
+// JSONP endpoint with WAF-bypassable callback (jub0bs chain lab)
+app.get('/api/jsonp/search', (req, res) => {
+  let callback = req.query.callback || req.query.cb;
+  const output = req.query.output;
+  const q = req.query.q || 'test';
+
+  // Simulated WAF: block callback if path starts with ? (standard query)
+  // The WAF checks the raw URL — if it starts with /api/jsonp/search?callback= it blocks
+  // But /api/jsonp/search&callback= (& instead of ?) bypasses
+  if (output === 'jsonp' && callback) {
+    // Allow double-encoded callback values (the vuln)
+    try { callback = decodeURIComponent(callback); } catch(e) {}
+    try { callback = decodeURIComponent(callback); } catch(e) {}
+
+    res.setHeader('Content-Type', 'application/javascript');
+    return res.send(`${callback}({"query":"${q}","results":[],"status":"ok"})`);
+  }
+
+  res.json({ query: q, results: [], status: 'ok' });
+});
+
+// User profile with CORS that trusts any subdomain (for chain labs)
+app.get('/api/chain/profile', (req, res) => {
+  const origin = req.headers.origin || '';
+  // VULNERABLE: trusts any *.localhost origin (simulates *.redacted.com)
+  if (/^https?:\/\/([a-z0-9-]+\.)*localhost(:\d+)?$/.test(origin) || origin.includes('localhost')) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+  }
+  if (req.session && req.session.user) {
+    res.json({
+      username: req.session.user.username,
+      email: req.session.user.email,
+      role: req.session.user.role,
+      csrftoken: crypto.randomBytes(16).toString('hex'),
+      apiKey: 'sk_live_chain_' + crypto.randomBytes(8).toString('hex')
+    });
+  } else {
+    res.status(401).json({ error: 'Not authenticated' });
+  }
+});
+
+// Token exchange endpoint (Microsoft-style token forwarding lab)
+app.get('/api/auth/iframe-token', (req, res) => {
+  if (req.session && req.session.user) {
+    res.json({
+      accessToken: 'eyJ_' + Buffer.from(JSON.stringify({
+        sub: req.session.user.username,
+        email: req.session.user.email,
+        scope: 'user_impersonation',
+        exp: Date.now() + 3600000
+      })).toString('base64'),
+      tokenType: 'Bearer',
+      expiresIn: 3600,
+      scope: 'user_impersonation'
+    });
+  } else {
+    res.status(401).json({ error: 'Not authenticated' });
+  }
+});
+
+// Endpoint that reflects param inside a script tag (double-encoding lab)
+app.get('/api/log/event', (req, res) => {
+  const eventName = req.query.event || 'pageview';
+  const ref = req.query.ref || 'direct';
+
+  // VULNERABLE: ref is reflected inside a script tag's console.log
+  // Server-side "filter" strips < > = and unencoded quotes
+  let safeRef = ref.replace(/[<>"'=]/g, '');
+
+  res.setHeader('Content-Type', 'text/html');
+  res.send(`<!DOCTYPE html>
+<html><head><title>Event Logger</title></head>
+<body style="font-family:sans-serif;padding:40px;background:#f8fafc">
+<h3>Event Logged</h3>
+<p>Event: ${eventName}</p>
+<p>Referrer tracked successfully.</p>
+<script>
+  // Analytics tracking
+  console.log("Event tracked: ${eventName}, ref: ${safeRef}");
+  window.parent.postMessage({type:'eventLogged', event:'${eventName}'}, '*');
+</script>
+</body></html>`);
+});
+
 // Catch-all for lab pages
 app.get('/labs/*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', req.path));

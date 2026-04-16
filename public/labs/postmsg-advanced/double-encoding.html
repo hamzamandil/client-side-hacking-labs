@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analytics Pro - Event Tracker</title>
+  <link rel="stylesheet" href="/css/hint-panel.css">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#fafafa;color:#18181b}
+    .an-nav{background:#18181b;color:#e4e4e7;height:48px;display:flex;align-items:center;padding:0 20px;gap:20px;font-size:13px}.an-nav .brand{font-weight:800;font-size:15px;color:#22d3ee}.an-nav a{color:#a1a1aa;text-decoration:none}.an-nav a:hover{color:#e4e4e7}
+    .container{max-width:860px;margin:0 auto;padding:32px 24px}
+    h1{font-size:22px;font-weight:700;margin-bottom:4px}
+    .desc{font-size:13px;color:#71717a;margin-bottom:24px}
+    .panel{background:#fff;border:1px solid #e4e4e7;border-radius:10px;margin-bottom:14px;overflow:hidden}.panel-head{padding:14px 18px;border-bottom:1px solid #f4f4f5;font-size:14px;font-weight:600}.panel-body{padding:18px}
+    .event-table{width:100%;border-collapse:collapse}
+    .event-table th{text-align:left;padding:8px 12px;font-size:11px;color:#a1a1aa;font-weight:600;text-transform:uppercase;border-bottom:1px solid #e4e4e7}
+    .event-table td{padding:10px 12px;font-size:13px;border-bottom:1px solid #f4f4f5;color:#52525b}
+    .event-table tr:hover td{background:#fafafa}
+    .tag{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600}
+    .tag-ok{background:#dcfce7;color:#16a34a}.tag-err{background:#fee2e2;color:#dc2626}
+    .tracking-iframe{border:1px solid #e4e4e7;border-radius:8px;overflow:hidden;margin-top:12px}
+    .tracking-iframe iframe{width:100%;height:180px;border:none}
+    .param-display{background:#18181b;color:#a1a1aa;padding:12px;border-radius:8px;font-family:'Fira Code',monospace;font-size:11px;margin-top:10px;overflow-x:auto;word-break:break-all}
+    .test-form{display:flex;gap:8px;margin-bottom:12px}
+    .test-form input{flex:1;padding:8px 12px;border:1px solid #e4e4e7;border-radius:7px;font-size:13px;font-family:monospace}
+    .test-form input:focus{outline:none;border-color:#22d3ee}
+    .btn{padding:7px 14px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:#22d3ee;color:#18181b}.btn:hover{background:#06b6d4}
+    .note{font-size:12px;color:#a1a1aa;margin-top:8px;line-height:1.5}
+  </style>
+</head>
+<body>
+  <div class="an-nav">
+    <div class="brand">Analytics Pro</div>
+    <a href="#">Dashboard</a><a href="#">Events</a><a href="#">Funnels</a><a href="#">Settings</a>
+  </div>
+
+  <div class="container">
+    <h1>Event Tracker</h1>
+    <p class="desc">Real-time event logging and referrer tracking</p>
+
+    <div class="panel">
+      <div class="panel-head">Recent Events</div>
+      <div class="panel-body">
+        <table class="event-table">
+          <thead><tr><th>Event</th><th>Referrer</th><th>Time</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>pageview</td><td>google.com</td><td>2s ago</td><td><span class="tag tag-ok">OK</span></td></tr>
+            <tr><td>click</td><td>twitter.com</td><td>15s ago</td><td><span class="tag tag-ok">OK</span></td></tr>
+            <tr><td>signup</td><td>newsletter</td><td>1m ago</td><td><span class="tag tag-ok">OK</span></td></tr>
+            <tr><td>error</td><td>internal</td><td>3m ago</td><td><span class="tag tag-err">ERR</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">Referrer Debug Tool</div>
+      <div class="panel-body">
+        <p style="font-size:13px;color:#71717a;margin-bottom:12px">Test how referrer values are processed by the event logger. The <code>ref</code> param is reflected in the tracking page inside a <code>console.log()</code> statement.</p>
+        <div class="test-form">
+          <input type="text" id="ref-input" placeholder='Enter a referrer value (e.g. google.com)' value="google.com">
+          <button class="btn" onclick="testRef()">Load Tracker</button>
+        </div>
+        <div class="tracking-iframe" id="tracker-frame">
+          <div style="padding:20px;text-align:center;color:#a1a1aa;font-size:13px">Click "Load Tracker" to embed the event logging page</div>
+        </div>
+        <div class="param-display" id="url-display">URL will appear here...</div>
+        <p class="note"><strong>Note:</strong> The server strips <code>&lt; &gt; " ' =</code> from the ref parameter before reflecting it. This prevents standard XSS payloads. Or does it?</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function testRef() {
+      var ref = document.getElementById('ref-input').value;
+      var url = '/api/log/event?event=pageview&ref=' + encodeURIComponent(ref);
+      document.getElementById('url-display').textContent = 'GET ' + url;
+      document.getElementById('tracker-frame').innerHTML =
+        '<iframe src="' + url + '"></iframe>';
+    }
+
+    // Check URL for auto-load ref
+    var params = new URLSearchParams(location.search);
+    var autoRef = params.get('ref');
+    if (autoRef) {
+      document.getElementById('ref-input').value = autoRef;
+      testRef();
+    }
+  </script>
+
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: Double URL-Encoding Context Mismatch</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">The server reflects <code>ref</code> inside a JS string in a <code>&lt;script&gt;</code> tag. It strips <code>&lt; &gt; " ' =</code> to "prevent XSS". But the filter runs on the URL-decoded value ONCE, while the browser may decode TWICE. Based on the <a href="https://www.intigriti.com/researchers/blog/hacking-tools/december-ctf-challenge-xs-leaks-postmessage-xss" style="color:#3b82f6">Intigriti CTF</a> and <a href="https://jub0bs.com/posts/2023-05-05-smorgasbord-of-a-bug-chain/" style="color:#3b82f6">jub0bs chain</a>.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">1</div><span>Understand the reflection context</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          The server responds with HTML where <code>ref</code> is inside:
+          <pre><code>&lt;script&gt;
+  console.log("Event tracked: pageview, ref: YOUR_INPUT");
+&lt;/script&gt;</code></pre>
+          You need to break out of the JS string. But <code>"</code> is stripped by the server.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">2</div><span>What the filter does</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Server code: <code>safeRef = ref.replace(/[&lt;&gt;"'=]/g, '')</code>. It removes these characters from the decoded value. Standard payloads like <code>"; alert(1); //</code> lose the <code>"</code> and become <code>; alert(1); //</code> which doesn't break the string.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">3</div><span>Double encoding trick</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          What if the quote is double-encoded? <code>%2522</code> = <code>%22</code> after first decode = <code>"</code> after second decode. The server's filter sees <code>%22</code> (not a literal quote) and lets it through. But when the browser renders the HTML response, it decodes it again into <code>"</code>.<br><br>
+          Wait — does Express double-decode? Not by default. But the <code>encodeURIComponent</code> on the client side and the server's query parser interact in a specific way. Test what happens with <code>%2522</code> vs the direct client <code>encodeURIComponent</code> flow.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">4</div><span>Alternative: JS escape sequences</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          You're inside a JS string literal. JS allows <code>\x22</code> (hex escape) and <code>\u0022</code> (unicode escape) for quotes. The server strips literal <code>"</code> but NOT <code>\x22</code> or <code>\u0022</code> — those are just alphanumeric + backslash. Try: <code>\x22; alert(1); //</code>
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">5</div><span>But backslash in URLs</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>\</code> needs to survive the URL encoding roundtrip. In the input field, type the literal text <code>\x22; alert(1); //</code> — the client does <code>encodeURIComponent</code> which preserves it as <code>%5Cx22...</code>, the server decodes to <code>\x22</code>, filter doesn't strip it (no literal <code>"</code>), and it reaches the JS context where the JS engine parses <code>\x22</code> as a quote.
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">🚩 Full Solution</button>
+        <div class="hint-spoiler-content">
+          <p>In the ref input field, type:</p>
+          <pre>\x22; alert(\x27XSS\x27); //</pre>
+          <p>Click "Load Tracker". The server strips nothing (no literal <code>"</code> or <code>'</code>). The rendered script becomes:</p>
+          <pre>console.log("Event tracked: pageview, ref: \x22; alert(\x27XSS\x27); //");</pre>
+          <p>The JS engine parses <code>\x22</code> as <code>"</code>, closing the string. <code>alert(\x27XSS\x27)</code> fires. The <code>//</code> comments out the rest.</p>
+          <p><strong>Alternative — hex for everything:</strong></p>
+          <pre>\x22;alert(document.domain);//</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('pm-adv-encoding', 'xss');
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
+  </script>
+</body>
+</html>

