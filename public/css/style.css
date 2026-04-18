@@ -332,6 +332,38 @@ code {
 .tag.chain { background: var(--purple-light); color: var(--purple); border-color: transparent; }
 .tag.oauth { background: var(--warning-light); color: var(--warning); border-color: transparent; }
 
+/* --- Writeup Button --- */
+.writeup-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--purple);
+  background: var(--purple-light);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-decoration: none;
+  font-family: inherit;
+}
+.writeup-btn:hover {
+  background: var(--purple);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(124, 58, 237, 0.2);
+}
+
+.lab-card.has-writeup {
+  border-left: 3px solid var(--purple);
+}
+.lab-card.has-writeup.solved {
+  border-left-color: var(--success);
+}
+
 /* --- Lab Page Layout --- */
 .lab-page {
   min-height: 100vh;
