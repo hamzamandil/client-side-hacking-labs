@@ -1018,6 +1018,195 @@ app.get('/api/log/event', (req, res) => {
 </body></html>`);
 });
 
+// ============================================================
+// LAB: Cache Deception + CSPT (zere.es article)
+// ============================================================
+// In-memory CDN-style cache — keyed by full URL path (ignoring headers!)
+const cdnCache = {};
+const STATIC_EXTENSIONS = ['.css', '.js', '.png', '.jpg', '.gif', '.ico', '.svg', '.woff', '.woff2', '.pdf'];
+
+function isStaticLookingPath(urlPath) {
+  const lower = urlPath.toLowerCase();
+  return STATIC_EXTENSIONS.some(ext => lower.endsWith(ext));
+}
+
+// Simulated CDN middleware — checks cache BEFORE auth, caches static-looking responses
+function cdnMiddleware(req, res, next) {
+  // Only act on /cache-api/ routes
+  if (!req.path.startsWith('/cache-api/')) return next();
+
+  const cacheKey = req.path; // URL only — headers are NOT part of key (cache deception enabler)
+  const cached = cdnCache[cacheKey];
+
+  // Serve from cache if hit
+  if (cached && (Date.now() - cached.time) < 86400000) {
+    res.setHeader('X-Cache', 'HIT from simulated-cdn');
+    res.setHeader('Content-Type', cached.contentType);
+    return res.send(cached.body);
+  }
+
+  // Wrap res.send to populate cache on static-looking responses
+  const origSend = res.send.bind(res);
+  res.send = function(body) {
+    if (res.statusCode === 200 && isStaticLookingPath(req.path)) {
+      cdnCache[cacheKey] = {
+        body: body,
+        contentType: res.getHeader('Content-Type') || 'text/plain',
+        time: Date.now()
+      };
+      res.setHeader('X-Cache', 'MISS from simulated-cdn, cached');
+      res.setHeader('Cache-Control', 'max-age=86400, public');
+    } else {
+      res.setHeader('X-Cache', 'MISS from simulated-cdn, not cached');
+    }
+    return origSend(body);
+  };
+  next();
+}
+
+app.use(cdnMiddleware);
+
+// Sensitive endpoint that returns auth token — vulnerable because CDN caches static-looking URLs
+app.get('/cache-api/v1/token*', (req, res) => {
+  // "Fake" auth: anyone with a session is authenticated
+  // In the cache deception scenario, the victim's browser sends credentials,
+  // the server returns the token, and the CDN caches it for everyone.
+  if (req.session && req.session.user) {
+    const token = 'eyJ_token_for_' + req.session.user.username + '_' + crypto.randomBytes(8).toString('hex');
+    const body = JSON.stringify({
+      accessToken: token,
+      user: req.session.user.username,
+      email: req.session.user.email,
+      scope: 'admin user_impersonation',
+      exp: Date.now() + 3600000
+    });
+    res.setHeader('Content-Type', 'application/json');
+    return res.send(body);
+  }
+  res.status(401).json({ error: 'Not authenticated' });
+});
+
+// CSPT-vulnerable user info endpoint — userId flows into fetch path
+app.get('/cache-api/v1/users/info/*', (req, res) => {
+  // The real value of req.path here after the CDN middleware ran
+  // If the CDN normalized path traversal, this hits /v1/token*
+  // If not, it stays at /v1/users/info/<input>
+  const subPath = req.params[0] || '';
+
+  if (req.session && req.session.user) {
+    res.json({
+      username: req.session.user.username,
+      info: { id: subPath, lastLogin: '2h ago', role: req.session.user.role }
+    });
+  } else {
+    res.status(401).json({ error: 'Not authenticated' });
+  }
+});
+
+// Account data endpoint for basic cache deception lab
+app.get('/cache-api/account*', (req, res) => {
+  if (req.session && req.session.user) {
+    const body = `<!DOCTYPE html><html><head><title>My Account</title></head>
+<body style="font-family:sans-serif;padding:40px;background:#f8fafc">
+<h2>Welcome, ${req.session.user.username}</h2>
+<p><strong>Email:</strong> ${req.session.user.email}</p>
+<p><strong>Role:</strong> ${req.session.user.role}</p>
+<p><strong>API Key:</strong> <code>sk_live_${crypto.randomBytes(12).toString('hex')}</code></p>
+<p><strong>Session Token:</strong> <code>sess_${crypto.randomBytes(16).toString('hex')}</code></p>
+<p><strong>Billing:</strong> Enterprise plan &middot; $499/month</p>
+</body></html>`;
+    res.setHeader('Content-Type', 'text/html');
+    return res.send(body);
+  }
+  res.status(401).send('Not authenticated');
+});
+
+// ============================================================
+// LAB: Web Cache Poisoning via X-Forwarded-Host
+// ============================================================
+// Separate cache (keyed only by path, NOT by X-Forwarded-Host)
+const poisonCache = {};
+
+app.get('/cache-poison/home', (req, res) => {
+  const cacheKey = req.path;
+  const now = Date.now();
+  const cached = poisonCache[cacheKey];
+
+  if (cached && (now - cached.time) < 60000) {
+    res.setHeader('X-Cache', 'HIT');
+    res.setHeader('Content-Type', 'text/html');
+    return res.send(cached.body);
+  }
+
+  // VULNERABLE: X-Forwarded-Host is used to build script src, but is NOT in cache key
+  const xfh = req.headers['x-forwarded-host'] || req.headers['host'] || 'localhost:3000';
+  const body = `<!DOCTYPE html>
+<html>
+<head>
+<title>NewsWire - Tech News</title>
+<style>body{font-family:sans-serif;max-width:800px;margin:40px auto;padding:20px;background:#fafafa}h1{color:#2563eb}.article{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:20px;margin-bottom:14px}.article h2{font-size:16px;margin-bottom:8px}.article p{font-size:13px;color:#6b7280;line-height:1.6}.meta{font-size:11px;color:#9ca3af;margin-top:10px}</style>
+<script src="//${xfh}/cache-poison/analytics.js"></script>
+</head>
+<body>
+<h1>NewsWire</h1>
+<div class="article">
+  <h2>Major Tech Company Announces New AI Platform</h2>
+  <p>In a groundbreaking announcement today, a leading tech firm unveiled its next-generation artificial intelligence platform designed for enterprise customers...</p>
+  <div class="meta">2 hours ago &middot; Tech</div>
+</div>
+<div class="article">
+  <h2>Cloud Provider Reports Record Q4 Earnings</h2>
+  <p>Cloud infrastructure revenue grew 34% year-over-year, driven by enterprise AI workloads and expanded geographic coverage...</p>
+  <div class="meta">5 hours ago &middot; Business</div>
+</div>
+<div class="article">
+  <h2>Security Researchers Disclose Critical Auth Flaw</h2>
+  <p>A team of researchers has disclosed a vulnerability affecting authentication systems across major SaaS platforms...</p>
+  <div class="meta">1 day ago &middot; Security</div>
+</div>
+<p style="font-size:11px;color:#9ca3af;margin-top:30px">X-Cache: ${cached ? 'HIT' : 'MISS'} &middot; Analytics host: ${xfh}</p>
+</body></html>`;
+
+  poisonCache[cacheKey] = { body, time: now };
+  res.setHeader('X-Cache', 'MISS, cached');
+  res.setHeader('Content-Type', 'text/html');
+  res.send(body);
+});
+
+app.get('/cache-poison/analytics.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.send('/* NewsWire analytics v1.2 */\nconsole.log("NewsWire analytics loaded from", location.hostname);');
+});
+
+app.get('/cache-poison/status', (req, res) => {
+  const entries = Object.keys(poisonCache).map(k => {
+    const bodyPreview = (poisonCache[k].body.match(/src="\/\/([^/]+)/) || [])[1] || 'unknown';
+    return { path: k, cachedScriptHost: bodyPreview, age: Math.floor((Date.now() - poisonCache[k].time) / 1000) };
+  });
+  res.json({ cache: entries });
+});
+
+app.post('/cache-poison/flush', (req, res) => {
+  Object.keys(poisonCache).forEach(k => delete poisonCache[k]);
+  res.json({ success: true, message: 'Cache flushed' });
+});
+
+// Inspect the CDN cache (for CSPT lab UI)
+app.get('/cache-api/_inspect', (req, res) => {
+  const entries = Object.keys(cdnCache).map(k => ({
+    path: k,
+    contentType: cdnCache[k].contentType,
+    bodyPreview: String(cdnCache[k].body).substring(0, 200),
+    age: Math.floor((Date.now() - cdnCache[k].time) / 1000)
+  }));
+  res.json({ cache: entries });
+});
+
+app.post('/cache-api/_flush', (req, res) => {
+  Object.keys(cdnCache).forEach(k => delete cdnCache[k]);
+  res.json({ success: true });
+});
+
 // Catch-all for lab pages
 app.get('/labs/*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', req.path));

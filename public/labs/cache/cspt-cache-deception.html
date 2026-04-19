@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nimbus - Cloud Console</title>
+  <link rel="stylesheet" href="/css/hint-panel.css">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#f5f7fb;color:#1e293b}
+    .nb-nav{background:#1e293b;color:#e2e8f0;height:52px;display:flex;align-items:center;padding:0 24px;justify-content:space-between}
+    .nb-nav .brand{font-weight:800;font-size:16px;display:flex;align-items:center;gap:8px}.nb-nav .brand em{color:#38bdf8;font-style:normal}
+    .nb-nav .links{display:flex;gap:20px;font-size:13px}.nb-nav .links a{color:#94a3b8;text-decoration:none;font-weight:500}.nb-nav .links a:hover{color:#e2e8f0}
+    .nb-nav .user{display:flex;align-items:center;gap:10px;font-size:13px;color:#94a3b8}.nb-nav .avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#38bdf8,#0ea5e9)}
+    .container{max-width:1100px;margin:0 auto;padding:28px 24px;display:grid;grid-template-columns:1fr 360px;gap:20px}
+    .main-col h1{font-size:22px;font-weight:700;margin-bottom:4px}.main-col .desc{font-size:13px;color:#64748b;margin-bottom:20px}
+    .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:14px;overflow:hidden}.card-head{padding:14px 20px;border-bottom:1px solid #f1f5f9;font-size:14px;font-weight:600;display:flex;justify-content:space-between;align-items:center}.card-body{padding:20px}
+    .user-info{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px}
+    .kv .k{font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;margin-bottom:2px}.kv .v{font-weight:500;color:#1e293b}
+    .btn{padding:8px 14px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:none}
+    .btn-primary{background:#0ea5e9;color:#fff}.btn-primary:hover{background:#0284c7}
+    .btn-outline{background:#fff;color:#475569;border:1px solid #e2e8f0}.btn-outline:hover{background:#f8fafc}
+    .btn-danger{background:#ef4444;color:#fff}.btn-danger:hover{background:#dc2626}
+    .panel-output{background:#0f172a;color:#cbd5e1;padding:14px;border-radius:8px;font-family:'Fira Code',monospace;font-size:11px;overflow-x:auto;max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+    .cdn-badge{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700;letter-spacing:0.04em}
+    .cdn-hit{background:#dcfce7;color:#16a34a}.cdn-miss{background:#fef3c7;color:#ca8a04}
+    .cache-entry{padding:10px 12px;background:#fafafa;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;font-size:12px}
+    .cache-entry .path{font-family:monospace;color:#0ea5e9;font-weight:600;word-break:break-all}
+    .cache-entry .preview{color:#64748b;margin-top:4px;font-family:monospace;font-size:11px;word-break:break-all}
+    .sidebar .card{margin-bottom:12px}
+    .attacker-panel{background:#fef2f2;border:2px solid #fecaca}.attacker-panel .card-head{background:#fee2e2;border-bottom-color:#fecaca;color:#991b1b}
+    .cspt-input{width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:7px;font-size:12px;font-family:monospace;margin-bottom:8px}
+    .cspt-input:focus{outline:none;border-color:#0ea5e9}
+    #login-wall{position:fixed;inset:0;background:#0f172a;display:flex;align-items:center;justify-content:center;z-index:9999}.lf{background:#1e293b;padding:36px;border-radius:16px;width:340px;color:#e2e8f0}.lf h2{font-size:20px;margin-bottom:4px;color:#38bdf8}.lf .sub{font-size:13px;color:#64748b;margin-bottom:20px}.lf input{width:100%;padding:10px 14px;background:#0f172a;border:1px solid #334155;border-radius:8px;color:#e2e8f0;font-size:14px;margin-bottom:10px}.lf button{width:100%;padding:10px;background:#0ea5e9;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer}
+    .hidden{display:none !important}
+    .hint-inline{background:#eff6ff;border-left:3px solid #3b82f6;padding:10px 14px;font-size:12px;color:#1e40af;margin-bottom:10px;border-radius:0 6px 6px 0}
+  </style>
+</head>
+<body>
+  <div id="login-wall">
+    <div class="lf">
+      <h2>Nimbus Cloud</h2>
+      <div class="sub">Developer Console</div>
+      <input type="text" id="u" placeholder="Username" value="victim">
+      <input type="password" id="p" placeholder="Password" value="password123">
+      <button onclick="doLogin()">Sign In</button>
+      <p style="font-size:11px;color:#64748b;margin-top:8px;text-align:center">victim / password123</p>
+    </div>
+  </div>
+
+  <div class="nb-nav">
+    <div class="brand"><em>Nimbus</em>Cloud</div>
+    <div class="links"><a href="#">Resources</a><a href="#">APIs</a><a href="#">Billing</a><a href="#">Support</a></div>
+    <div class="user"><span id="navuser">—</span><div class="avatar"></div></div>
+  </div>
+
+  <div class="container">
+    <div class="main-col">
+      <h1>Developer Console</h1>
+      <p class="desc">Manage your cloud resources and API access</p>
+
+      <div class="card">
+        <div class="card-head">User Lookup <span style="font-size:11px;color:#94a3b8;font-weight:500">Fetches /v1/users/info/:id</span></div>
+        <div class="card-body">
+          <p style="font-size:12px;color:#64748b;margin-bottom:10px">Look up info for any user in your organization:</p>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="userid-input" placeholder="Enter user ID" value="alice" class="cspt-input" style="flex:1;margin-bottom:0">
+            <button class="btn btn-primary" onclick="lookupUser()">Look Up</button>
+          </div>
+          <div id="user-output" class="panel-output" style="margin-top:10px">// Output appears here</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">Your Access Token <span style="font-size:11px;color:#94a3b8;font-weight:500">/v1/token (sensitive, requires auth)</span></div>
+        <div class="card-body">
+          <p style="font-size:12px;color:#64748b;margin-bottom:10px">Fetch your current API access token. This endpoint returns <code>Cache-Control: no-store</code>.</p>
+          <button class="btn btn-primary" onclick="getToken()">Refresh Token</button>
+          <div id="token-output" class="panel-output" style="margin-top:10px">// Your token appears here</div>
+        </div>
+      </div>
+
+      <div class="card attacker-panel">
+        <div class="card-head">🎯 Attacker View <span style="font-size:11px;font-weight:500">No auth required</span></div>
+        <div class="card-body">
+          <p style="font-size:12px;color:#7f1d1d;margin-bottom:10px">This panel simulates what an <strong>unauthenticated attacker</strong> sees when they fetch from the CDN. If they know a cached sensitive URL, they get its content — no session needed.</p>
+          <input type="text" id="attacker-url" class="cspt-input" placeholder="URL to fetch (e.g. /cache-api/v1/token.css)" value="/cache-api/v1/token.css">
+          <button class="btn btn-danger" onclick="attackerFetch()">Fetch Without Auth</button>
+          <div id="attacker-output" class="panel-output" style="margin-top:10px">// Attacker output</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="card">
+        <div class="card-head">📦 Simulated CDN Cache <button class="btn btn-outline" onclick="flushCache()" style="font-size:10px;padding:4px 10px">Flush</button></div>
+        <div class="card-body" id="cache-panel">
+          <p style="font-size:12px;color:#94a3b8">Empty cache</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">ℹ️ CDN Behavior</div>
+        <div class="card-body" style="font-size:12px;color:#475569;line-height:1.7">
+          <p>&bull; URLs ending in <code>.css .js .png .jpg .gif .svg</code> are cached for 24h</p>
+          <p>&bull; Cache key is the URL path <strong>only</strong> (headers ignored)</p>
+          <p>&bull; Cached responses are served before auth check</p>
+          <p>&bull; <code>Cache-Control</code> response header is overridden for static extensions</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * Nimbus Cloud Console v4.2.1
+     * User lookup + token management
+     */
+    !function(){
+      var AUTH_ENDPOINT = "/api/auth/me";
+      var USER_INFO_URL = "/cache-api/v1/users/info/";
+      var TOKEN_URL = "/cache-api/v1/token";
+
+      window.lookupUser = function(){
+        var id = document.getElementById("userid-input").value;
+        if (!id) return;
+        var out = document.getElementById("user-output");
+        // VULNERABLE: user input flows directly into the fetch URL path
+        // Browser normalizes "../" sequences before the request is sent
+        var url = USER_INFO_URL + id;
+        out.textContent = "GET " + url + "\n\n";
+        fetch(url, {credentials:"include"}).then(function(r){
+          out.textContent += "Status: " + r.status + "\n";
+          out.textContent += "X-Cache: " + (r.headers.get("X-Cache") || "(none)") + "\n";
+          out.textContent += "Content-Type: " + (r.headers.get("Content-Type") || "(none)") + "\n\n";
+          return r.text();
+        }).then(function(body){
+          out.textContent += body;
+          refreshCachePanel();
+        });
+      };
+
+      window.getToken = function(){
+        var out = document.getElementById("token-output");
+        out.textContent = "GET " + TOKEN_URL + "\n\n";
+        fetch(TOKEN_URL, {credentials:"include"}).then(function(r){
+          out.textContent += "Status: " + r.status + "\n";
+          out.textContent += "X-Cache: " + (r.headers.get("X-Cache") || "(none)") + "\n\n";
+          return r.text();
+        }).then(function(body){
+          out.textContent += body;
+          refreshCachePanel();
+        });
+      };
+
+      window.attackerFetch = function(){
+        var url = document.getElementById("attacker-url").value;
+        var out = document.getElementById("attacker-output");
+        out.textContent = "GET " + url + "  (no credentials)\n\n";
+        // Explicitly NO credentials - simulating an attacker without the victim's session
+        fetch(url, {credentials:"omit"}).then(function(r){
+          out.textContent += "Status: " + r.status + "\n";
+          out.textContent += "X-Cache: " + (r.headers.get("X-Cache") || "(none)") + "\n\n";
+          return r.text();
+        }).then(function(body){
+          out.textContent += body;
+          // Auto-solve if the attacker reads the victim's token
+          if (body && body.indexOf("accessToken") !== -1 && body.indexOf("eyJ_token_for_") !== -1) {
+            setTimeout(function(){ if (typeof solveLab === "function") solveLab("cache-cspt-deception"); }, 100);
+          }
+        });
+      };
+
+      window.refreshCachePanel = function(){
+        fetch("/cache-api/_inspect").then(function(r){return r.json()}).then(function(d){
+          var panel = document.getElementById("cache-panel");
+          if (!d.cache.length) { panel.innerHTML = '<p style="font-size:12px;color:#94a3b8">Empty cache</p>'; return; }
+          panel.innerHTML = d.cache.map(function(e){
+            return '<div class="cache-entry"><div class="path">' + e.path + '</div><div class="preview">' + e.bodyPreview.replace(/[<>&]/g, function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c]}) + '</div></div>';
+          }).join("");
+        });
+      };
+
+      window.flushCache = function(){
+        fetch("/cache-api/_flush", {method:"POST"}).then(function(){ refreshCachePanel(); });
+      };
+
+      window.doLogin = function(){
+        fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({username:document.getElementById("u").value,password:document.getElementById("p").value})}).then(function(r){return r.json()}).then(function(d){
+          if (d.success){document.getElementById("login-wall").classList.add("hidden");document.getElementById("navuser").textContent=d.user.username;refreshCachePanel()}
+        });
+      };
+
+      fetch(AUTH_ENDPOINT,{credentials:"include"}).then(function(r){return r.json()}).then(function(d){
+        if (d.user){document.getElementById("login-wall").classList.add("hidden");document.getElementById("navuser").textContent=d.user.username;refreshCachePanel()}
+      }).catch(function(){});
+    }();
+  </script>
+
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: CSPT + Cache Deception → ATO</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">This is a two-bug chain. The sensitive <code>/v1/token</code> endpoint returns your auth token but is not cacheable. The user lookup endpoint has a path traversal. Combine them: force the token response to be cached at a path the attacker can fetch. Based on <a href="https://zere.es/posts/cache-deception-cspt-account-takeover/" style="color:#3b82f6">zere's article</a>.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">1</div><span>Understand the CDN</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          The CDN sits in front of the origin. It caches any URL ending in <code>.css .js .png .jpg .gif .svg</code> and serves cached responses to ANYONE (no auth check). The cache key is just the URL path — headers are ignored.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">2</div><span>The sensitive endpoint</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>/cache-api/v1/token</code> returns your access token. It requires session auth. Normally it's not cached (no static extension). But what if we could trick the browser into sending the request to a path ending in <code>.css</code>?
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">3</div><span>The CSPT in user lookup</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          The user lookup code does:
+          <pre><code>var url = "/cache-api/v1/users/info/" + userId;
+fetch(url, {credentials: "include"});</code></pre>
+          If <code>userId</code> contains <code>../</code>, the browser normalizes the URL before sending. You control the final path.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">4</div><span>Craft the traversal</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Starting from <code>/cache-api/v1/users/info/</code>, you need two <code>../</code> to get back to <code>/cache-api/v1/</code>, then <code>token.css</code>:<br>
+          <code>../../token.css</code>
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">5</div><span>The chain</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          (a) Victim enters <code>../../token.css</code> as user ID (or clicks a crafted URL)<br>
+          (b) Browser normalizes → fetch <code>/cache-api/v1/token.css</code> with their session cookie<br>
+          (c) Server returns the token (the <code>/v1/token*</code> handler matches)<br>
+          (d) CDN sees <code>.css</code> extension, caches the response<br>
+          (e) Attacker fetches <code>/cache-api/v1/token.css</code> with no auth — gets cached token
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">🚩 Full Solution</button>
+        <div class="hint-spoiler-content">
+          <p><strong>Step 1 (as victim):</strong> In the User Lookup field, enter:</p>
+          <pre>../../token.css</pre>
+          <p>Click "Look Up". Watch the cache panel — a new entry for <code>/cache-api/v1/token.css</code> appears with your token.</p>
+          <p><strong>Step 2 (as attacker):</strong> In the Attacker View, the URL is already <code>/cache-api/v1/token.css</code>. Click "Fetch Without Auth".</p>
+          <p>The CDN serves the cached response. No session cookie needed. Attacker gets the token → full account takeover.</p>
+          <p><strong>Why this works:</strong> Browser normalizes <code>/cache-api/v1/users/info/../../token.css</code> to <code>/cache-api/v1/token.css</code> BEFORE sending. The request has the victim's cookies. Server's <code>/v1/token*</code> route matches. CDN sees <code>.css</code> and caches. Attacker reads cached data.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('cache-cspt-deception', 'xss');
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
+  </script>
+</body>
+</html>

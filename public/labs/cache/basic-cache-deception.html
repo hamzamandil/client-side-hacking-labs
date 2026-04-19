@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loop - Account Portal</title>
+  <link rel="stylesheet" href="/css/hint-panel.css">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#fafaf9;color:#1c1917}
+    .lp-nav{background:#fff;border-bottom:1px solid #e7e5e4;height:54px;display:flex;align-items:center;padding:0 24px;justify-content:space-between}.lp-nav .brand{font-weight:800;font-size:16px;color:#16a34a}.lp-nav .links{display:flex;gap:18px;font-size:13px}.lp-nav .links a{color:#57534e;text-decoration:none;font-weight:500}.lp-nav .links a.active{color:#16a34a}
+    .container{max-width:920px;margin:0 auto;padding:28px 24px}
+    h1{font-size:22px;font-weight:700;margin-bottom:4px}.desc{font-size:13px;color:#78716c;margin-bottom:20px}
+    .grid{display:grid;grid-template-columns:1fr 320px;gap:18px}
+    .panel{background:#fff;border:1px solid #e7e5e4;border-radius:12px;margin-bottom:14px;overflow:hidden}.panel-head{padding:14px 18px;border-bottom:1px solid #f5f5f4;font-size:14px;font-weight:600;display:flex;justify-content:space-between;align-items:center}.panel-body{padding:18px}
+    .iframe-preview{border:1px solid #e7e5e4;border-radius:8px;overflow:hidden;background:#fff}.iframe-preview iframe{width:100%;height:280px;border:none}
+    .btn{padding:8px 14px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:none}.btn-primary{background:#16a34a;color:#fff}.btn-primary:hover{background:#15803d}.btn-outline{background:#fff;color:#57534e;border:1px solid #e7e5e4}.btn-outline:hover{background:#fafaf9}.btn-danger{background:#ef4444;color:#fff}.btn-danger:hover{background:#dc2626}
+    .url-box{display:flex;gap:6px;margin-bottom:10px}
+    .url-box input{flex:1;padding:8px 12px;border:1px solid #e7e5e4;border-radius:7px;font-size:12px;font-family:monospace}
+    .output{background:#0c0a09;color:#d6d3d1;padding:14px;border-radius:8px;font-family:monospace;font-size:11px;max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin-top:10px}
+    .cache-entry{padding:10px;background:#fafaf9;border:1px solid #e7e5e4;border-radius:7px;margin-bottom:6px;font-size:12px}.cache-entry .path{font-family:monospace;color:#16a34a;font-weight:600;word-break:break-all}
+    .attacker-panel{background:#fef2f2;border:2px solid #fecaca}.attacker-panel .panel-head{background:#fee2e2;border-bottom-color:#fecaca;color:#991b1b}
+    #login-wall{position:fixed;inset:0;background:#1c1917;display:flex;align-items:center;justify-content:center;z-index:9999}.lf{background:#292524;padding:34px;border-radius:12px;width:340px;color:#e7e5e4}.lf h2{font-size:20px;color:#16a34a;margin-bottom:4px}.lf .sub{font-size:12px;color:#78716c;margin-bottom:18px}.lf input{width:100%;padding:10px 14px;background:#1c1917;border:1px solid #44403c;border-radius:7px;color:#e7e5e4;font-size:14px;margin-bottom:10px}.lf button{width:100%;padding:10px;background:#16a34a;color:#fff;border:none;border-radius:7px;font-weight:600;cursor:pointer}
+    .hidden{display:none !important}
+  </style>
+</head>
+<body>
+  <div id="login-wall">
+    <div class="lf">
+      <h2>Loop</h2>
+      <div class="sub">Account Portal</div>
+      <input type="text" id="u" placeholder="Username" value="victim">
+      <input type="password" id="p" placeholder="Password" value="password123">
+      <button onclick="doLogin()">Sign In</button>
+      <p style="font-size:11px;color:#78716c;margin-top:8px;text-align:center">victim / password123</p>
+    </div>
+  </div>
+
+  <div class="lp-nav">
+    <div class="brand">Loop</div>
+    <div class="links"><a href="#">Dashboard</a><a href="#" class="active">Account</a><a href="#">Billing</a><a href="#">Settings</a></div>
+  </div>
+
+  <div class="container">
+    <h1>My Account</h1>
+    <p class="desc">Manage your account, view billing, and check your API credentials.</p>
+
+    <div class="grid">
+      <div>
+        <div class="panel">
+          <div class="panel-head">Account Page <span style="font-size:11px;color:#78716c;font-weight:500">served via CDN</span></div>
+          <div class="panel-body">
+            <p style="font-size:12px;color:#57534e;margin-bottom:10px">The account page fetches data from <code>/cache-api/account</code>. It contains your email, API key, session token, and billing plan.</p>
+            <button class="btn btn-primary" onclick="loadAccount()">Load Account Page</button>
+            <div class="iframe-preview" style="margin-top:12px;display:none" id="ifp">
+              <iframe id="acc-iframe" src="about:blank"></iframe>
+            </div>
+            <div class="output" id="acc-log">// Fetch log appears here</div>
+          </div>
+        </div>
+
+        <div class="panel attacker-panel">
+          <div class="panel-head">🎯 Attacker: Phishing Link</div>
+          <div class="panel-body">
+            <p style="font-size:12px;color:#7f1d1d;margin-bottom:10px">Craft a URL the victim will visit. If the URL causes the account page to be cached under a non-sensitive path, you can fetch it later without auth.</p>
+            <p style="font-size:12px;color:#7f1d1d;margin-bottom:6px">Try different path endings:</p>
+            <div class="url-box">
+              <input type="text" id="victim-url" value="/cache-api/account">
+              <button class="btn btn-primary" onclick="simulateVictimVisit()">Visit as victim</button>
+            </div>
+            <p style="font-size:11px;color:#7f1d1d;margin-bottom:6px">Then fetch as attacker (no auth):</p>
+            <div class="url-box">
+              <input type="text" id="attacker-url" value="/cache-api/account">
+              <button class="btn btn-danger" onclick="attackerFetch()">Fetch (no auth)</button>
+            </div>
+            <div class="output" id="att-log">// Attacker output</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel">
+          <div class="panel-head">📦 CDN Cache <button class="btn btn-outline" onclick="flushCache()" style="font-size:10px;padding:4px 8px">Flush</button></div>
+          <div class="panel-body" id="cache-panel">
+            <p style="font-size:12px;color:#a8a29e">Empty</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">ℹ️ How the CDN caches</div>
+          <div class="panel-body" style="font-size:12px;color:#57534e;line-height:1.7">
+            <p>Responses cached if URL ends in:</p>
+            <p><code>.css .js .png .jpg .gif .svg .woff .pdf</code></p>
+            <p style="margin-top:8px">Cache key: URL path only. Auth headers ignored. Cache TTL: 24 hours.</p>
+            <p style="margin-top:8px;color:#991b1b">This is the <strong>canonical cache deception pattern</strong> documented by Omer Gil in 2017.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function doLogin(){
+      fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({username:document.getElementById("u").value,password:document.getElementById("p").value})}).then(function(r){return r.json()}).then(function(d){if(d.success)document.getElementById("login-wall").classList.add("hidden")});
+    }
+    fetch("/api/auth/me",{credentials:"include"}).then(function(r){return r.json()}).then(function(d){if(d.user)document.getElementById("login-wall").classList.add("hidden")}).catch(function(){});
+
+    function log(elId, msg) {
+      document.getElementById(elId).textContent += msg + "\n";
+    }
+    function clearLog(elId) {
+      document.getElementById(elId).textContent = "";
+    }
+
+    function loadAccount(){
+      clearLog("acc-log");
+      log("acc-log", "GET /cache-api/account\n");
+      fetch("/cache-api/account", {credentials:"include"}).then(function(r){
+        log("acc-log", "Status: " + r.status);
+        log("acc-log", "X-Cache: " + (r.headers.get("X-Cache") || "(none)"));
+        log("acc-log", "Cache-Control: " + (r.headers.get("Cache-Control") || "(none)"));
+        return r.text();
+      }).then(function(b){
+        document.getElementById("ifp").style.display = "block";
+        document.getElementById("acc-iframe").srcdoc = b;
+        refreshCache();
+      });
+    }
+
+    function simulateVictimVisit(){
+      clearLog("acc-log");
+      var url = document.getElementById("victim-url").value;
+      log("acc-log", "Victim's browser navigates to: " + url + "\n(with session cookie)");
+      fetch(url, {credentials:"include"}).then(function(r){
+        log("acc-log", "Status: " + r.status);
+        log("acc-log", "X-Cache: " + (r.headers.get("X-Cache") || "(none)"));
+        return r.text();
+      }).then(function(b){
+        log("acc-log", "\nResponse preview:");
+        log("acc-log", b.substring(0, 200));
+        refreshCache();
+      });
+    }
+
+    function attackerFetch(){
+      clearLog("att-log");
+      var url = document.getElementById("attacker-url").value;
+      log("att-log", "GET " + url + "  (no credentials)\n");
+      fetch(url, {credentials:"omit"}).then(function(r){
+        log("att-log", "Status: " + r.status);
+        log("att-log", "X-Cache: " + (r.headers.get("X-Cache") || "(none)") + "\n");
+        return r.text();
+      }).then(function(b){
+        log("att-log", "Response:\n" + b);
+        if (b && b.indexOf("Session Token") !== -1 && b.indexOf("sess_") !== -1) {
+          setTimeout(function(){ if (typeof solveLab === "function") solveLab("cache-basic-deception"); }, 100);
+        }
+      });
+    }
+
+    function refreshCache(){
+      fetch("/cache-api/_inspect").then(function(r){return r.json()}).then(function(d){
+        var panel = document.getElementById("cache-panel");
+        if (!d.cache.length) { panel.innerHTML = '<p style="font-size:12px;color:#a8a29e">Empty</p>'; return; }
+        panel.innerHTML = d.cache.map(function(e){
+          return '<div class="cache-entry"><div class="path">' + e.path + '</div><div style="color:#78716c;margin-top:4px;font-size:11px">Age: ' + e.age + 's · ' + e.contentType + '</div></div>';
+        }).join("");
+      });
+    }
+
+    function flushCache(){
+      fetch("/cache-api/_flush", {method:"POST"}).then(function(){ refreshCache(); });
+    }
+
+    refreshCache();
+  </script>
+
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: Classic Web Cache Deception</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">The CDN caches by file extension. The origin server doesn't care about the extension — it serves the account page for any path starting with <code>/cache-api/account</code>. Trick the CDN into caching the authenticated response at a static-looking URL.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">1</div><span>Test the extension quirk</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          The account handler is defined as <code>/cache-api/account*</code> — any trailing path/extension returns the same account page. So <code>/cache-api/account/foo.css</code> or <code>/cache-api/account.css</code> both return your authenticated data.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">2</div><span>Craft the victim URL</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          In the "Visit as victim" box, try <code>/cache-api/account/style.css</code>. The victim's browser sends the cookie. Server returns account HTML. CDN sees <code>.css</code> and caches it.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">3</div><span>Fetch as attacker</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Change the attacker URL to <code>/cache-api/account/style.css</code>. Fetch without credentials. CDN sees a cached response for that exact path and returns it. You get the victim's HTML including API key, session token, billing info.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">4</div><span>Real-world delivery</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          In the real world, you'd send the victim the URL (phishing email, social media, etc.). When they click and their browser navigates, the cache fills with their data. Then you fetch the same URL unauthenticated.
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">🚩 Full Solution</button>
+        <div class="hint-spoiler-content">
+          <p><strong>1. As victim:</strong></p>
+          <pre>/cache-api/account/profile.css</pre>
+          <p>Click "Visit as victim" — cache fills.</p>
+          <p><strong>2. As attacker:</strong></p>
+          <pre>/cache-api/account/profile.css</pre>
+          <p>Click "Fetch (no auth)". CDN serves the cached authenticated response.</p>
+          <p>Other working variations: <code>/cache-api/account.css</code>, <code>/cache-api/account/anything.js</code>, <code>/cache-api/account/x.png</code>. Any path that starts with <code>/cache-api/account</code> AND ends with a cacheable extension.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('cache-basic-deception', 'xss');
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
+  </script>
+</body>
+</html>

