@@ -1222,6 +1222,183 @@ app.get('/flowpay/me', (req, res) => {
 });
 
 // ============================================================
+// LAB: Multi-Origin OAuth Dirty Dancing
+//   Main app    = localhost:3000  (this one)
+//   OAuth IdP   = localhost:4000  (separate Express below)
+//   Sandbox     = localhost:5000  (separate Express below)
+// ============================================================
+
+// In-memory exfil collector (cross-origin reachable)
+const ddExfilLog = [];
+app.get('/dd/collect', (req, res) => {
+  const data = req.query.data;
+  if (data) ddExfilLog.push({ data: data, time: Date.now(), ip: req.ip });
+  // Send permissive CORS so the attacker's cross-origin JS can also POST here if desired
+  res.header('Access-Control-Allow-Origin', '*');
+  res.type('text/plain').send('ok');
+});
+app.get('/dd/collected', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.json({ entries: ddExfilLog });
+});
+app.post('/dd/clear', (req, res) => { ddExfilLog.length = 0; res.json({ ok: true }); });
+
+// Vulnerable OAuth callback page on the MAIN app
+app.get('/dd/callback', (req, res) => {
+  // We serve this as HTML so the vulnerable JS runs in the main app origin.
+  // The query & fragment carry state + token — we do NOT strip them from the URL.
+  res.type('html').send(`<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Dash SSO — Sign In</title>
+<style>
+  body{font-family:'Inter',-apple-system,sans-serif;background:#f8fafc;margin:0;padding:40px;color:#0f172a}
+  .card{max-width:520px;margin:40px auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:36px;box-shadow:0 4px 20px rgba(0,0,0,0.04)}
+  .logo{font-weight:800;font-size:20px;color:#4f46e5;margin-bottom:8px}
+  .status{padding:14px 18px;border-radius:10px;margin:18px 0;font-size:14px}
+  .status.ok{background:#dcfce7;color:#166534;border:1px solid #86efac}
+  .status.err{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
+  .muted{color:#64748b;font-size:12px;margin-top:14px}
+  .telemetry-box{margin-top:18px;padding:10px 14px;background:#f1f5f9;border-radius:8px;font-size:11px;color:#475569;font-family:monospace}
+  iframe{display:none}
+</style></head>
+<body>
+  <div class="card">
+    <div class="logo">Dash</div>
+    <h1 style="font-size:20px;margin-bottom:6px">Completing sign in...</h1>
+    <p class="muted">We're verifying your session with the identity provider.</p>
+    <div id="status-box"></div>
+    <div class="telemetry-box">Analytics frame: <span id="t-frame">—</span></div>
+  </div>
+
+  <!-- This iframe is where the bug lives. The app stores the full location
+       (including fragment with token/code) in the iframe's window.name
+       so the sandbox can read "context". The sandbox is intended to be
+       innocuous but has an XSS sink. -->
+  <iframe id="analytics-frame"></iframe>
+
+  <script>
+    (function() {
+      var url = new URL(location.href);
+      var expectedState = sessionStorage.getItem('dd_state') || 'expected_state_xyz';
+      var gotState = url.searchParams.get('state');
+      var box = document.getElementById('status-box');
+
+      if (gotState !== expectedState) {
+        box.innerHTML = '<div class="status err"><strong>Sign-in failed.</strong> State mismatch \u2014 possible CSRF. Please try again.</div>';
+        // NOTE: we are NOT clearing the URL fragment. The access_token is still there.
+      } else {
+        box.innerHTML = '<div class="status ok"><strong>Signed in.</strong></div>';
+      }
+
+      // Load the "analytics" sandbox iframe either way.
+      // BUG: we pass location (with the fragment containing the token) into the
+      // iframe's window.name, assuming the sandbox is benign. It has XSS.
+      var telemetrySrc = url.searchParams.get('telemetry') || 'console.log("default analytics");';
+      var iframe = document.getElementById('analytics-frame');
+      iframe.name = JSON.stringify({ href: location.href, referrer: document.referrer });
+      iframe.src = 'http://localhost:5000/embed?src=' + encodeURIComponent(telemetrySrc);
+      document.getElementById('t-frame').textContent = iframe.src;
+    })();
+  </script>
+</body></html>`);
+});
+
+// ---- Start the OAuth provider on :4000 ----
+const oauthApp = express();
+oauthApp.use(express.urlencoded({ extended: true }));
+oauthApp.use(cookieParser());
+oauthApp.use(session({
+  name: 'dd_idp_sid',
+  secret: 'idp-lab-secret',
+  resave: false, saveUninitialized: true,
+  cookie: { sameSite: 'lax' }
+}));
+
+const ddIdpUsers = {
+  'victim': { username: 'victim', password: 'password123', email: 'victim@dash.example', name: 'Victim User' }
+};
+const ddCodes = {};
+
+oauthApp.get('/', (req, res) => {
+  res.type('html').send('<body style="font-family:sans-serif;padding:40px"><h2>Dash Identity Provider</h2><p>Running on :4000</p><p>Session user: '+(req.session.user||'not logged in')+'</p><form method=POST action=/login><input name=username placeholder=user value=victim> <input name=password type=password value=password123> <button>Sign in to IdP</button></form></body>');
+});
+
+oauthApp.post('/login', (req, res) => {
+  const u = ddIdpUsers[req.body.username];
+  if (u && u.password === req.body.password) {
+    req.session.user = u.username;
+    res.type('html').send('<body style="font-family:sans-serif;padding:40px"><h2>Signed in to IdP as '+u.username+'</h2><p>You can close this tab now.</p><script>setTimeout(function(){window.close();},800);</script></body>');
+  } else {
+    res.status(401).send('Invalid credentials');
+  }
+});
+
+oauthApp.get('/authorize', (req, res) => {
+  const { client_id, response_type, redirect_uri, state, scope } = req.query;
+  if (!req.session.user) {
+    return res.type('html').send(`<body style="font-family:sans-serif;padding:40px">
+      <h2>Dash IdP \u2014 Sign in required</h2>
+      <p>To continue, sign in below.</p>
+      <form method=POST action=/login>
+        <input name=username placeholder=user value=victim><br><br>
+        <input name=password type=password value=password123><br><br>
+        <input type=hidden name=back value="${req.originalUrl.replace(/"/g,'&quot;')}">
+        <button>Sign in and continue</button>
+      </form></body>`);
+  }
+
+  // Implicit flow supported
+  if (response_type === 'token') {
+    const token = 'eyJ_dd_' + crypto.randomBytes(12).toString('hex');
+    const fragment = 'access_token=' + token + '&token_type=bearer&state=' + encodeURIComponent(state || '');
+    return res.redirect(redirect_uri + '#' + fragment);
+  }
+
+  // Authorization code flow
+  const code = crypto.randomBytes(10).toString('hex');
+  ddCodes[code] = { user: req.session.user, client_id: client_id, scope: scope, iat: Date.now() };
+  const sep = redirect_uri.includes('?') ? '&' : '?';
+  res.redirect(redirect_uri + sep + 'code=' + code + '&state=' + encodeURIComponent(state || ''));
+});
+
+oauthApp.post('/token', (req, res) => {
+  const { code, grant_type } = req.body;
+  if (grant_type !== 'authorization_code' || !ddCodes[code]) {
+    return res.status(400).json({ error: 'invalid_grant' });
+  }
+  const data = ddCodes[code];
+  delete ddCodes[code];
+  res.json({
+    access_token: 'eyJ_dd_' + crypto.randomBytes(12).toString('hex'),
+    token_type: 'bearer', expires_in: 3600,
+    user: data.user
+  });
+});
+
+oauthApp.listen(4000, () => {
+  console.log('  OAuth IdP:      http://localhost:4000');
+});
+
+// ---- Start the Sandbox on :5000 ----
+const sandboxApp = express();
+
+// Sandbox /embed reflects `src` into a <script> tag. Real XSS sink.
+sandboxApp.get('/embed', (req, res) => {
+  const src = String(req.query.src || '');
+  res.type('html').send(`<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Sandbox</title>
+<style>body{font-family:sans-serif;margin:0;padding:14px;font-size:12px;color:#475569;background:#f8fafc}</style>
+</head><body>
+<div>Sandbox iframe loaded from <code>localhost:5000</code>. window.name length: <span id=wn>0</span></div>
+<script>document.getElementById('wn').textContent = window.name.length;</script>
+<script>${src}</script>
+</body></html>`);
+});
+
+sandboxApp.listen(5000, () => {
+  console.log('  Sandbox:        http://localhost:5000');
+});
+
+// ============================================================
 // LAB: Cache Deception + CSPT (zere.es article)
 // ============================================================
 // In-memory CDN-style cache — keyed by full URL path (ignoring headers!)

