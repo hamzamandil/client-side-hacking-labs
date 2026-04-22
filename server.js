@@ -1019,6 +1019,209 @@ app.get('/api/log/event', (req, res) => {
 });
 
 // ============================================================
+// LAB: Grand Chain (CSPT + PostMessage + OAuth)
+// ============================================================
+
+// Integration marketplace manifest endpoint — VULNERABLE: integration ID flows into fetch path
+// Real integrations return their manifest here. CSPT point: attacker traverses to their uploaded file.
+const integrationManifests = {
+  'slack': { name: 'Slack', description: 'Sync notifications with Slack', icon: '💬', oauthUrl: null, consentRequired: true },
+  'github': { name: 'GitHub', description: 'Link PRs to tasks', icon: '🔗', oauthUrl: null, consentRequired: true },
+  'notion': { name: 'Notion', description: 'Embed docs in workspace', icon: '📝', oauthUrl: null, consentRequired: true }
+};
+
+app.get('/api/integrations/:id/manifest', (req, res) => {
+  const m = integrationManifests[req.params.id];
+  if (m) return res.json({ ...m, id: req.params.id });
+  res.status(404).json({ error: 'Integration not found' });
+});
+
+// ============================================================
+// LAB: RideMetric Self-XSS + Login CSRF (Uber/Whitton pattern)
+// ============================================================
+const ridemetricUsers = {
+  'driver-alex': { username: 'driver-alex', password: 'password123', email: 'alex@ridemetric.io', fullName: 'Alex Driver', bio: 'Driving since 2019', earnings: 12480.50, rides: 1823, attackerAccount: false },
+  'attacker-zero': { username: 'attacker-zero', password: 'attacker123', email: 'zero@evil.com', fullName: 'Zero Hero', bio: '', earnings: 0, rides: 0, attackerAccount: true }
+};
+
+// GET /ridemetric/logout — CSRF-able (state-changing on GET with no token)
+app.get('/ridemetric/logout', (req, res) => {
+  req.session.ridemetric = null;
+  res.type('html').send('<html><body><script>window.close();</script><p>Logged out of RideMetric.</p></body></html>');
+});
+
+// Simple login form POST — sets a separate rm session
+app.post('/ridemetric/login', (req, res) => {
+  const { username, password } = req.body;
+  const u = ridemetricUsers[username];
+  if (u && u.password === password) {
+    req.session.ridemetric = username;
+    return res.json({ success: true, user: { username, email: u.email, fullName: u.fullName } });
+  }
+  res.status(401).json({ error: 'Invalid credentials' });
+});
+
+app.get('/ridemetric/me', (req, res) => {
+  const uname = req.session.ridemetric;
+  if (!uname) return res.status(401).json({ error: 'Not logged in' });
+  const u = ridemetricUsers[uname];
+  res.json({ username: u.username, email: u.email, fullName: u.fullName, bio: u.bio, earnings: u.earnings, rides: u.rides });
+});
+
+// VULNERABLE: OAuth-style SSO callback has NO state validation (login CSRF)
+// Attacker can pre-capture a valid 'code' from their own login flow and send it to victim
+// Victim's browser uses the code → logs them into the ATTACKER's account
+const ridemetricLoginCodes = {}; // code → username
+app.get('/ridemetric/sso/start', (req, res) => {
+  // Returns a one-time code for the given user (simulates SSO issuer)
+  const { user } = req.query;
+  if (!ridemetricUsers[user]) return res.status(404).send('No such user');
+  const code = crypto.randomBytes(10).toString('hex');
+  ridemetricLoginCodes[code] = user;
+  res.redirect('/ridemetric/sso/callback?code=' + code);
+});
+
+app.get('/ridemetric/sso/callback', (req, res) => {
+  const { code } = req.query;
+  const user = ridemetricLoginCodes[code];
+  if (!user) return res.status(400).send('Invalid code');
+  delete ridemetricLoginCodes[code];
+  // VULNERABILITY: no state parameter — CSRF-able
+  req.session.ridemetric = user;
+  res.redirect('/labs/chains/uber-self-xss.html');
+});
+
+// Attacker flow: grab your own OAuth code without burning it — for phishing delivery
+app.get('/ridemetric/sso/get-code', (req, res) => {
+  const { user } = req.query;
+  if (!ridemetricUsers[user]) return res.status(404).json({ error: 'No such user' });
+  const code = crypto.randomBytes(10).toString('hex');
+  ridemetricLoginCodes[code] = user;
+  res.json({ code, callback: '/ridemetric/sso/callback?code=' + code });
+});
+
+// Profile — bio field is XSS sink (self-XSS by default but chains via login CSRF)
+app.get('/ridemetric/profile/:username', (req, res) => {
+  const u = ridemetricUsers[req.params.username];
+  if (!u) return res.status(404).send('User not found');
+  const viewer = req.session.ridemetric;
+  const current = viewer ? ridemetricUsers[viewer] : null;
+  const pageTitle = current ? current.fullName : 'Guest';
+  // The viewer is "logged in as" — header shows their name. Body shows the TARGET profile.
+  res.type('html').send(`<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>${u.fullName} — RideMetric</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',sans-serif;background:#fafafa;color:#171717}
+  .nav{background:#000;color:#fff;height:52px;display:flex;align-items:center;padding:0 24px;justify-content:space-between}
+  .nav .brand{font-weight:800;font-size:16px}.nav .brand em{color:#22c55e;font-style:normal}
+  .nav .right{font-size:13px;color:#a3a3a3;display:flex;align-items:center;gap:10px}
+  .nav .avatar{width:28px;height:28px;border-radius:50%;background:#22c55e;color:#000;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+  .container{max-width:760px;margin:30px auto;padding:0 20px}
+  .card{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:24px;margin-bottom:14px}
+  .card h2{font-size:17px;font-weight:700;margin-bottom:4px}.card .sub{font-size:12px;color:#737373;margin-bottom:16px}
+  .profile-head{display:flex;gap:14px;align-items:center;margin-bottom:16px}
+  .p-avatar{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px}.stat{background:#f5f5f5;border-radius:8px;padding:10px 14px;font-size:13px}.stat .k{color:#737373;font-size:11px}.stat .v{font-weight:700;font-size:18px}
+  .bio-section{margin-top:14px;padding:14px;background:#f5f5f5;border-radius:8px}
+  .bio-label{font-size:11px;color:#737373;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px}
+</style></head>
+<body>
+<div class="nav">
+  <div class="brand"><em>Ride</em>Metric</div>
+  <div class="right">Logged in as <strong>${pageTitle}</strong><div class="avatar">${(current ? current.fullName[0] : '?').toUpperCase()}</div></div>
+</div>
+<div class="container">
+  <div class="card">
+    <div class="profile-head">
+      <div class="p-avatar">${u.fullName[0]}</div>
+      <div>
+        <h2>${u.fullName}</h2>
+        <div class="sub">@${u.username} &middot; ${u.email}</div>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k">Total Earnings</div><div class="v">$${u.earnings.toLocaleString()}</div></div>
+      <div class="stat"><div class="k">Completed Rides</div><div class="v">${u.rides}</div></div>
+    </div>
+    <div class="bio-section">
+      <div class="bio-label">Bio</div>
+      <div class="bio-content">${u.bio || '<em style="color:#a3a3a3">No bio set</em>'}</div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Back to dashboard</h2>
+    <div class="sub">Session belongs to: ${pageTitle}${current && current.attackerAccount ? ' (ATTACKER ACCOUNT)' : ''}</div>
+    <p style="font-size:13px;color:#737373;margin-top:8px">This profile is viewable by any logged-in user. The bio is rendered as HTML — you can put anything in your own profile.</p>
+  </div>
+</div>
+</body></html>`);
+});
+
+app.post('/ridemetric/bio', (req, res) => {
+  const uname = req.session.ridemetric;
+  if (!uname) return res.status(401).json({ error: 'Not authenticated' });
+  ridemetricUsers[uname].bio = req.body.bio || '';
+  res.json({ success: true });
+});
+
+// ============================================================
+// LAB: Flowpay Dirty Dancing + PostMessage href leak
+// ============================================================
+// This lab uses the existing /oauth/authorize and /oauth/callback — the callback
+// already has a postMessage gadget when the error param is set. We add a dedicated
+// "sso completion" endpoint that the app uses, which leaks via postMessage to opener.
+
+app.get('/flowpay/sso-complete', (req, res) => {
+  // This page is the redirect target of an OAuth flow
+  // It reads the fragment (#access_token=...) and posts status to window.opener
+  // The "analytics" handler responds to any message with the URL — opener OR any origin
+  res.type('html').send(`<!DOCTYPE html>
+<html><head><title>Flowpay — Login complete</title>
+<style>body{font-family:sans-serif;text-align:center;padding:40px;background:#f8fafc;color:#0f172a}
+.logo{font-weight:800;font-size:22px;color:#3b82f6;margin-bottom:12px}
+.spinner{width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:s 1s linear infinite;margin:20px auto}
+@keyframes s{to{transform:rotate(360deg)}}</style></head>
+<body>
+<div class="logo">Flowpay</div>
+<div class="spinner"></div>
+<p>Completing sign-in...</p>
+<script>
+  // Tell the opener that login finished. Analytics product team wanted URL tracking
+  // so the team added a postMessage responder — any caller can query the final URL.
+  window.__flowpayAnalytics = { pageUrl: location.href };
+
+  function notifyOpener() {
+    if (window.opener) {
+      try {
+        window.opener.postMessage({ type: 'flowpay:sso-done', url: window.__flowpayAnalytics.pageUrl }, '*');
+      } catch(e){}
+    }
+  }
+
+  // Respond to any analytics query with the full URL (including any fragment)
+  window.addEventListener('message', function(e) {
+    if (e.data && (e.data === 'getAnalytics' || e.data.type === 'getAnalytics' || e.data.type === 'fp:query')) {
+      try { e.source.postMessage({ type: 'flowpay:analytics', url: window.__flowpayAnalytics.pageUrl }, '*'); } catch(err){}
+    }
+  });
+
+  notifyOpener();
+  // Keep responding every 200ms so a late-connecting parent can still query
+  setInterval(function(){ notifyOpener(); }, 250);
+</script>
+</body></html>`);
+});
+
+// Flowpay dashboard — shows user's session state
+app.get('/flowpay/me', (req, res) => {
+  if (req.session && req.session.user) {
+    res.json({ user: req.session.user, balance: 42391.00, accountId: 'FP-' + req.session.user.id });
+  } else {
+    res.status(401).json({ error: 'Not logged in' });
+  }
+});
+
+// ============================================================
 // LAB: Cache Deception + CSPT (zere.es article)
 // ============================================================
 // In-memory CDN-style cache — keyed by full URL path (ignoring headers!)

